@@ -65,7 +65,7 @@ cococrawl ./images --absolute-paths
 
 ## Output Format
 
-The tool generates a JSON file following the COCO dataset format:
+The tool generates a JSON file following the [COCO dataset format](https://cocodataset.org/#format-data):
 
 ```json
 {

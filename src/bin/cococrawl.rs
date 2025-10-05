@@ -3,12 +3,12 @@ use std::path::PathBuf;
 use std::fs;
 use std::fs::{File, canonicalize};
 use std::io::BufWriter;
-use indicatif::ProgressIterator;
+use indicatif::ParallelProgressIterator;
 use clap::Parser;
 use image::ImageReader;
 use chrono::{Datelike, Utc, DateTime};
+use rayon::prelude::*;
 use serde_json;
-// use rayon::prelude::*;
 
 use cococrawl::{CocoFile, CocoImage, CocoInfo};
 
@@ -62,7 +62,7 @@ fn main() {
             })
     }).collect();
 
-    let images: Vec<CocoImage> = found_files.iter().progress().enumerate().map(|(id, file_path)| {
+    let images: Vec<CocoImage> = found_files.par_iter().progress().enumerate().map(|(id, file_path)| {
         let metadata = fs::metadata(file_path).unwrap();
         let date_created = metadata.created().unwrap_or_else(|_| std::time::SystemTime::now());
 

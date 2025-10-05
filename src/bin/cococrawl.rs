@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::fs;
-use std::fs::File;
+use std::fs::{File, canonicalize};
 use std::io::BufWriter;
 use indicatif::ProgressIterator;
 use clap::Parser;
@@ -25,8 +25,13 @@ struct Args {
     #[clap(short, long, default_value = "coco.json")]
     output: String,
 
+    /// Version string for the COCO info section
     #[clap(short, long, default_value = "1.0.0")]
     version_string: String,
+
+    /// Use absolute paths for image file names. By default, relative paths are used.
+    #[clap(short, long)]
+    absolute_paths: bool,
 }
 
 fn main() {
@@ -48,7 +53,13 @@ fn main() {
                     .and_then(|ext| ext.to_str())
                     .map_or(false, |ext_str| extension_set.contains(&ext_str.to_lowercase().as_str()))
             })
-            .map(|entry| entry.path().to_path_buf())
+            .map(|entry| {
+                if args.absolute_paths {
+                    canonicalize(entry.path()).unwrap_or(entry.path().to_path_buf())
+                } else {
+                    entry.path().to_path_buf()
+                }
+            })
     }).collect();
 
     let images: Vec<CocoImage> = found_files.iter().progress().enumerate().map(|(id, file_path)| {

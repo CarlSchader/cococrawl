@@ -90,7 +90,6 @@ fn main() {
                 width,
                 height,
                 file_name: file_path.to_string_lossy().to_string(),
-                license: 0,
                 flickr_url: String::new(),
                 coco_url: String::new(),
                 date_captured: DateTime::<Utc>::from(date_created),
@@ -111,6 +110,7 @@ fn main() {
         info: coco_info,
         images,
         annotations: Vec::new(),
+        licenses: Vec::new(),
     };
 
     let writer = BufWriter::new(output_file);

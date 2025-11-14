@@ -103,6 +103,7 @@ fn main() {
                     .map(|ann| ann.clone())
             })
             .collect(),
+        licenses: coco_file.licenses.clone(),
     };
 
     let output_file = File::create(&args.output).expect("Could not create output file");

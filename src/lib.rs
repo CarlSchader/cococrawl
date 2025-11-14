@@ -16,12 +16,18 @@ pub struct CocoInfo {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+pub struct CocoLicense {
+    pub id: u64,
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct CocoImage {
     pub id: u64,
     pub width: u32,
     pub height: u32,
     pub file_name: String,
-    pub license: u32,
     pub flickr_url: String,
     pub coco_url: String,
     pub date_captured: DateTime<Utc>,
@@ -39,6 +45,7 @@ pub struct CocoFile {
     pub info: CocoInfo,
     pub images: Vec<CocoImage>,
     pub annotations: Vec<CocoAnnotation>,
+    pub licenses: Vec<CocoLicense>,
 }
 
 pub struct IDMapEntry<'a> {

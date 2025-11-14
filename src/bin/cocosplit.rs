@@ -47,7 +47,7 @@ fn main() {
     let blacklisted_image_ids: HashSet<u64> = args.blacklist_file.iter().flat_map(|path| {
         let json_str = fs::read_to_string(path).expect("Could not read blacklist COCO JSON file");
         let blacklist_coco: cococrawl::CocoFile = serde_json::from_str(&json_str).expect("Could not parse blacklist COCO JSON");
-        blacklist_coco.images.into_par_iter().map(|img| img.id).collect::<HashSet<u64>>()
+        blacklist_coco.images.into_par_iter().progress().map(|img| img.id).collect::<HashSet<u64>>()
     }).collect(); 
 
     
@@ -55,6 +55,7 @@ fn main() {
     let id_map = coco_file.make_id_map();
     let mut id_map_entries: Vec<_> = id_map
         .par_iter()
+        .progress_count(id_map.len() as u64)
         .filter(|(id, _)| !blacklisted_image_ids.contains(id))
         .collect();
 
@@ -76,8 +77,8 @@ fn main() {
     // Write updated COCO JSON to output directory
     let output_coco_file = CocoFile {
         info: coco_file.info.clone(),
-        images: id_map_entries.par_iter().map(|(_, entry)| entry.image.clone()).collect(),
-        annotations: id_map_entries.par_iter().flat_map(|(_, entry)| entry.annotations.clone().into_par_iter().map(|ann| ann.clone())).collect(),
+        images: id_map_entries.par_iter().progress().map(|(_, entry)| entry.image.clone()).collect(),
+        annotations: id_map_entries.par_iter().progress().flat_map(|(_, entry)| entry.annotations.clone().into_par_iter().map(|ann| ann.clone())).collect(),
     };
 
     let output_file = File::create(&args.output).expect("Could not create output file");

@@ -1,14 +1,14 @@
+use clap::Parser;
+use cococrawl::CocoFile;
+use indicatif::ParallelProgressIterator;
+use rand::{SeedableRng, rng, rngs::StdRng, seq::SliceRandom};
+use rayon::prelude::*;
+use serde_json;
 use std::collections::HashSet;
-use std::path::PathBuf;
 use std::fs;
 use std::fs::File;
 use std::io::BufWriter;
-use cococrawl::CocoFile;
-use indicatif::ParallelProgressIterator;
-use clap::Parser;
-use serde_json;
-use rand::{SeedableRng, rng, rngs::StdRng, seq::SliceRandom};
-use rayon::prelude::*;
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -28,8 +28,8 @@ struct Args {
 
     /// blacklist dataset JSON file paths
     /// cocosplit dataset.json -o val-set.json -c 10000
-    /// cocosplit dataset.json -o test-set.json -c 20000 -b val-set.json 
-    /// cocosplit dataset.json -o train-set.json -b test-set.json -b val-set.json 
+    /// cocosplit dataset.json -o test-set.json -c 20000 -b val-set.json
+    /// cocosplit dataset.json -o train-set.json -b test-set.json -b val-set.json
     #[clap(short, long)]
     blacklist_file: Vec<PathBuf>,
 
@@ -42,15 +42,25 @@ fn main() {
     let args = Args::parse();
 
     let coco_json = fs::read_to_string(&args.coco_file).expect("Could not read COCO JSON file");
-    let coco_file: cococrawl::CocoFile = serde_json::from_str(&coco_json).expect("Could not parse COCO JSON");
+    let coco_file: cococrawl::CocoFile =
+        serde_json::from_str(&coco_json).expect("Could not parse COCO JSON");
 
-    let blacklisted_image_ids: HashSet<u64> = args.blacklist_file.iter().flat_map(|path| {
-        let json_str = fs::read_to_string(path).expect("Could not read blacklist COCO JSON file");
-        let blacklist_coco: cococrawl::CocoFile = serde_json::from_str(&json_str).expect("Could not parse blacklist COCO JSON");
-        blacklist_coco.images.into_par_iter().progress().map(|img| img.id).collect::<HashSet<u64>>()
-    }).collect(); 
-
-    
+    let blacklisted_image_ids: HashSet<u64> = args
+        .blacklist_file
+        .iter()
+        .flat_map(|path| {
+            let json_str =
+                fs::read_to_string(path).expect("Could not read blacklist COCO JSON file");
+            let blacklist_coco: cococrawl::CocoFile =
+                serde_json::from_str(&json_str).expect("Could not parse blacklist COCO JSON");
+            blacklist_coco
+                .images
+                .into_par_iter()
+                .progress()
+                .map(|img| img.id)
+                .collect::<HashSet<u64>>()
+        })
+        .collect();
 
     let id_map = coco_file.make_id_map();
     let mut id_map_entries: Vec<_> = id_map
@@ -59,16 +69,16 @@ fn main() {
         .filter(|(id, _)| !blacklisted_image_ids.contains(id))
         .collect();
 
-    // shuffle 
+    // shuffle
     match args.seed {
         Some(seed) => {
             let mut rng = StdRng::seed_from_u64(seed);
             id_map_entries.shuffle(&mut rng);
-        },
+        }
         None => {
             let mut rng = rng();
             id_map_entries.shuffle(&mut rng);
-        },
+        }
     };
 
     let output_count = args.count.unwrap_or(id_map_entries.len());
@@ -77,12 +87,27 @@ fn main() {
     // Write updated COCO JSON to output directory
     let output_coco_file = CocoFile {
         info: coco_file.info.clone(),
-        images: id_map_entries.par_iter().progress().map(|(_, entry)| entry.image.clone()).collect(),
-        annotations: id_map_entries.par_iter().progress().flat_map(|(_, entry)| entry.annotations.clone().into_par_iter().map(|ann| ann.clone())).collect(),
+        images: id_map_entries
+            .par_iter()
+            .progress()
+            .map(|(_, entry)| entry.image.clone())
+            .collect(),
+        annotations: id_map_entries
+            .par_iter()
+            .progress()
+            .flat_map(|(_, entry)| {
+                entry
+                    .annotations
+                    .clone()
+                    .into_par_iter()
+                    .map(|ann| ann.clone())
+            })
+            .collect(),
     };
 
     let output_file = File::create(&args.output).expect("Could not create output file");
     let writer = BufWriter::new(output_file);
 
-    serde_json::to_writer_pretty(writer, &output_coco_file).expect("Could not write JSON to output file");
+    serde_json::to_writer_pretty(writer, &output_coco_file)
+        .expect("Could not write JSON to output file");
 }

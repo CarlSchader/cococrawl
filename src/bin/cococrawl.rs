@@ -1,14 +1,14 @@
+use chrono::{DateTime, Datelike, Utc};
+use clap::Parser;
+use image::ImageReader;
+use indicatif::ParallelProgressIterator;
+use rayon::prelude::*;
+use serde_json;
 use std::collections::HashSet;
-use std::path::PathBuf;
 use std::fs;
 use std::fs::{File, canonicalize};
 use std::io::BufWriter;
-use indicatif::ParallelProgressIterator;
-use clap::Parser;
-use image::ImageReader;
-use chrono::{Datelike, Utc, DateTime};
-use rayon::prelude::*;
-use serde_json;
+use std::path::PathBuf;
 
 use cococrawl::{CocoFile, CocoImage, CocoInfo};
 
@@ -41,46 +41,62 @@ fn main() {
 
     let extension_set: HashSet<&str> = IMAGE_EXTENSIONS.iter().cloned().collect();
 
-    let found_files: Vec<PathBuf> = args.directories.iter().flat_map(|dir| {
-        walkdir::WalkDir::new(dir)
-            .into_iter()
-            .filter_map(Result::ok)
-            .filter(|entry| entry.file_type().is_file())
-            .filter(|entry| {
-                entry
-                    .path()
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .map_or(false, |ext_str| extension_set.contains(&ext_str.to_lowercase().as_str()))
-            })
-            .map(|entry| {
-                if args.absolute_paths {
-                    canonicalize(entry.path()).unwrap_or(entry.path().to_path_buf())
-                } else {
-                    entry.path().to_path_buf()
-                }
-            })
-    }).collect();
+    let found_files: Vec<PathBuf> = args
+        .directories
+        .iter()
+        .flat_map(|dir| {
+            walkdir::WalkDir::new(dir)
+                .into_iter()
+                .filter_map(Result::ok)
+                .filter(|entry| entry.file_type().is_file())
+                .filter(|entry| {
+                    entry
+                        .path()
+                        .extension()
+                        .and_then(|ext| ext.to_str())
+                        .map_or(false, |ext_str| {
+                            extension_set.contains(&ext_str.to_lowercase().as_str())
+                        })
+                })
+                .map(|entry| {
+                    if args.absolute_paths {
+                        canonicalize(entry.path()).unwrap_or(entry.path().to_path_buf())
+                    } else {
+                        entry.path().to_path_buf()
+                    }
+                })
+        })
+        .collect();
 
-    let images: Vec<CocoImage> = found_files.par_iter().progress().enumerate().map(|(id, file_path)| {
-        let metadata = fs::metadata(file_path).unwrap();
-        let date_created = metadata.created().unwrap_or_else(|_| std::time::SystemTime::now());
+    let images: Vec<CocoImage> = found_files
+        .par_iter()
+        .progress()
+        .enumerate()
+        .map(|(id, file_path)| {
+            let metadata = fs::metadata(file_path).unwrap();
+            let date_created = metadata
+                .created()
+                .unwrap_or_else(|_| std::time::SystemTime::now());
 
-        let (width, height) = ImageReader::open(file_path).unwrap()
-            .with_guessed_format().unwrap()
-            .into_dimensions().unwrap_or((0, 0));
+            let (width, height) = ImageReader::open(file_path)
+                .unwrap()
+                .with_guessed_format()
+                .unwrap()
+                .into_dimensions()
+                .unwrap_or((0, 0));
 
-        CocoImage {
-            id: id as u64,
-            width,
-            height,
-            file_name: file_path.to_string_lossy().to_string(),
-            license: 0,
-            flickr_url: String::new(),
-            coco_url: String::new(),
-            date_captured: DateTime::<Utc>::from(date_created),
-        }
-    }).collect();
+            CocoImage {
+                id: id as u64,
+                width,
+                height,
+                file_name: file_path.to_string_lossy().to_string(),
+                license: 0,
+                flickr_url: String::new(),
+                coco_url: String::new(),
+                date_captured: DateTime::<Utc>::from(date_created),
+            }
+        })
+        .collect();
 
     let coco_info = CocoInfo {
         year: Utc::now().year(),

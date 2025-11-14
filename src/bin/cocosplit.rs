@@ -1,10 +1,13 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::fs;
 use std::fs::File;
 use std::io::BufWriter;
+use cococrawl::CocoFile;
 use indicatif::ParallelProgressIterator;
 use clap::Parser;
 use serde_json;
+use rand::{SeedableRng, rng, rngs::StdRng, seq::SliceRandom};
 use rayon::prelude::*;
 
 #[derive(Parser, Debug)]
@@ -28,47 +31,57 @@ struct Args {
     /// cocosplit dataset.json -o test-set.json -c 20000 -b val-set.json 
     /// cocosplit dataset.json -o train-set.json -b test-set.json -b val-set.json 
     #[clap(short, long)]
-    blacklist_file: Vec<PathBuf>
+    blacklist_file: Vec<PathBuf>,
+
+    /// seed
+    #[clap(short, long)]
+    seed: Option<u64>,
 }
 
 fn main() {
     let args = Args::parse();
 
     let coco_json = fs::read_to_string(&args.coco_file).expect("Could not read COCO JSON file");
-    let coco_json_file_name = args.coco_file.file_name().unwrap().to_string_lossy();
+    let coco_file: cococrawl::CocoFile = serde_json::from_str(&coco_json).expect("Could not parse COCO JSON");
 
-    let output_file = File::create(&args.output).expect("Could not create output file");
+    let blacklisted_image_ids: HashSet<u64> = args.blacklist_file.iter().flat_map(|path| {
+        let json_str = fs::read_to_string(path).expect("Could not read blacklist COCO JSON file");
+        let blacklist_coco: cococrawl::CocoFile = serde_json::from_str(&json_str).expect("Could not parse blacklist COCO JSON");
+        blacklist_coco.images.into_par_iter().map(|img| img.id).collect::<HashSet<u64>>()
+    }).collect(); 
 
-    // Make directory for output if it doesn't exist
-    fs::create_dir_all(&args.output_dir_path).expect("Could not create output directory");
+    
 
-    let images_output_path = PathBuf::from(&args.output_dir_path).join("images");
-    fs::create_dir_all(&images_output_path).expect("Could not create images output directory");
+    let id_map = coco_file.make_id_map();
+    let mut id_map_entries: Vec<_> = id_map
+        .par_iter()
+        .filter(|(id, _)| !blacklisted_image_ids.contains(id))
+        .collect();
 
-    let mut coco_file: cococrawl::CocoFile = serde_json::from_str(&coco_json).expect("Could not parse COCO JSON");
+    // shuffle 
+    match args.seed {
+        Some(seed) => {
+            let mut rng = StdRng::seed_from_u64(seed);
+            id_map_entries.shuffle(&mut rng);
+        },
+        None => {
+            let mut rng = rng();
+            id_map_entries.shuffle(&mut rng);
+        },
+    };
 
-    // Iterate over images and copy them to the output directory
-    let images_count = coco_file.images.len() as u64;
-    let digits = ((images_count as f64).log10().floor() as usize) + 1;
-    coco_file.images.par_iter_mut().progress_count(images_count).for_each(|image| {
-        let src_path = PathBuf::from(&image.file_name);
-        if src_path.exists() && src_path.is_file() {
-            let file_extension = src_path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
-            // output file name should be padded id with leading zeros + original extension
-            let file_name = format!("{:0width$}.{}", image.id, file_extension, width = digits);
-            let dest_path = images_output_path.join(file_name);
-            let file_name = dest_path.file_name().unwrap();
-            fs::copy(&src_path, &dest_path).expect("Could not copy image file");
-            // change the file_name in the image struct to the new relative path
-            image.file_name = format!("images/{}", file_name.to_string_lossy());
-        } else {
-            eprintln!("Warning: Source image file does not exist or is not a file: {:?}", src_path);
-        }
-    });
+    let output_count = args.count.unwrap_or(id_map_entries.len());
+    let id_map_entries: Vec<_> = id_map_entries.iter().take(output_count).collect();
 
     // Write updated COCO JSON to output directory
-    let output_coco_path = PathBuf::from(&args.output_dir_path).join(coco_json_file_name.to_string());
-    let output_file = File::create(&output_coco_path).expect("Could not create output COCO JSON file");
+    let output_coco_file = CocoFile {
+        info: coco_file.info.clone(),
+        images: id_map_entries.par_iter().map(|(_, entry)| entry.image.clone()).collect(),
+        annotations: id_map_entries.par_iter().flat_map(|(_, entry)| entry.annotations.clone().into_par_iter().map(|ann| ann.clone())).collect(),
+    };
+
+    let output_file = File::create(&args.output).expect("Could not create output file");
     let writer = BufWriter::new(output_file);
-    serde_json::to_writer_pretty(writer, &coco_file).expect("Could not write COCO JSON to output file");
+
+    serde_json::to_writer_pretty(writer, &output_coco_file).expect("Could not write JSON to output file");
 }

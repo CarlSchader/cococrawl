@@ -16,6 +16,14 @@ Recursively scans directories for image files and generates a COCO-formatted JSO
 
 Consolidates a COCO dataset by copying all referenced images into a single directory structure and updating the manifest with standardized file names.
 
+### cococount
+
+Displays statistics about a COCO dataset including the number of images and annotations.
+
+### cocosplit
+
+Creates dataset splits (train/val/test) from a COCO dataset with optional blacklisting to exclude images from previously created splits. Maintains image-annotation relationships.
+
 ## Features
 
 - **Fast parallel processing** with Rayon
@@ -34,6 +42,8 @@ cargo build --release
 Binaries will be available in `target/release/`:
 - `target/release/cococrawl`
 - `target/release/cococp`
+- `target/release/cococount`
+- `target/release/cocosplit`
 
 ## Usage
 
@@ -100,6 +110,70 @@ my-dataset/
     ├── 00001.png
     └── ...
 ```
+
+### cococount
+
+Display statistics about a COCO dataset.
+
+**Basic usage:**
+
+```bash
+cococount <COCO_JSON_FILE>
+```
+
+**Example:**
+
+```bash
+cococount dataset.json
+```
+
+**Output:**
+
+```
+Coco File: dataset.json
+Images: 50000
+Annotations: 150000
+```
+
+### cocosplit
+
+Create dataset splits from a COCO dataset with random shuffling and optional blacklisting.
+
+**Basic usage:**
+
+```bash
+cocosplit <COCO_JSON_FILE>
+```
+
+**Options:**
+
+- `-o, --output <FILE>` - Output JSON file path (default: `split.json`)
+- `-c, --count <NUMBER>` - Number of images to include in the split (default: all non-blacklisted images)
+- `-b, --blacklist-file <FILE>` - COCO JSON file(s) containing images to exclude (can be specified multiple times)
+- `-s, --seed <NUMBER>` - Random seed for reproducible shuffling
+
+**Examples:**
+
+```bash
+# Create validation set with 10,000 images
+cocosplit dataset.json -o val-set.json -c 10000
+
+# Create test set with 20,000 images, excluding validation set
+cocosplit dataset.json -o test-set.json -c 20000 -b val-set.json
+
+# Create training set with remaining images (excluding val and test)
+cocosplit dataset.json -o train-set.json -b val-set.json -b test-set.json
+
+# Use a seed for reproducible splits
+cocosplit dataset.json -o val-set.json -c 10000 -s 42
+```
+
+**Notes:**
+
+- Preserves image-annotation relationships
+- Images are randomly shuffled before selection
+- Blacklisted images are completely excluded from the output
+- Without `-c`, all non-blacklisted images are included
 
 ## COCO Format
 

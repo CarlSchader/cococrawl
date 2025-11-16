@@ -45,7 +45,7 @@ fn main() {
     let coco_file: cococrawl::CocoFile =
         serde_json::from_str(&coco_json).expect("Could not parse COCO JSON");
 
-    let blacklisted_image_ids: HashSet<u64> = args
+    let blacklisted_image_ids: HashSet<i64> = args
         .blacklist_file
         .iter()
         .flat_map(|path| {
@@ -58,7 +58,7 @@ fn main() {
                 .into_par_iter()
                 .progress()
                 .map(|img| img.id)
-                .collect::<HashSet<u64>>()
+                .collect::<HashSet<i64>>()
         })
         .collect();
 
@@ -103,6 +103,7 @@ fn main() {
                     .map(|ann| ann.clone())
             })
             .collect(),
+        categories: coco_file.categories.clone(),
         licenses: coco_file.licenses.clone(),
     };
 

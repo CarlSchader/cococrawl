@@ -86,10 +86,11 @@ fn main() {
                 .unwrap_or((0, 0));
 
             CocoImage {
-                id: id as u64,
+                id: id as i64,
                 width,
                 height,
                 file_name: file_path.to_string_lossy().to_string(),
+                license: 0,
                 flickr_url: String::new(),
                 coco_url: String::new(),
                 date_captured: DateTime::<Utc>::from(date_created),
@@ -110,6 +111,7 @@ fn main() {
         info: coco_info,
         images,
         annotations: Vec::new(),
+        categories: None,
         licenses: Vec::new(),
     };
 

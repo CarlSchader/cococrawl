@@ -1,15 +1,15 @@
-use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CocoFile {
     pub info: CocoInfo,
     pub images: Vec<CocoImage>,
     pub annotations: Vec<CocoAnnotation>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub categories: Option<Vec<CocoCategory>>,
 
@@ -76,10 +76,7 @@ pub struct CocoObjectDetectionAnnotation {
     pub area: f32,
     pub bbox: [f32; 4],
 
-    #[serde(
-        deserialize_with = "bool_from_int",
-        serialize_with = "bool_to_int"
-    )]
+    #[serde(deserialize_with = "bool_from_int", serialize_with = "bool_to_int")]
     pub iscrowd: bool,
 }
 
@@ -92,10 +89,7 @@ pub struct CocoKeypointDetectionAnnotation {
     pub area: f32,
     pub bbox: [f32; 4],
 
-    #[serde(
-        deserialize_with = "bool_from_int",
-        serialize_with = "bool_to_int"
-    )]
+    #[serde(deserialize_with = "bool_from_int", serialize_with = "bool_to_int")]
     pub iscrowd: bool,
     pub keypoints: Vec<f32>, // [x1, y1, v1, x2, y2, v2, ..., xn, yn, vn]
     pub num_keypoints: u32,
@@ -121,10 +115,7 @@ pub struct CocoDensePoseAnnotation {
     pub image_id: i64,
     pub category_id: i32,
 
-    #[serde(
-        deserialize_with = "bool_from_int",
-        serialize_with = "bool_to_int"
-    )]
+    #[serde(deserialize_with = "bool_from_int", serialize_with = "bool_to_int")]
     pub iscrowd: bool,
 
     pub area: u32,
@@ -138,7 +129,6 @@ pub struct CocoDensePoseAnnotation {
 
     #[serde(rename = "dp_V")]
     pub dp_v: Vec<f32>,
-
 
     pub dp_x: Vec<f32>,
     pub dp_y: Vec<f32>,
@@ -157,7 +147,8 @@ pub enum CocoCategory {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct CocoObjectDetectionCategory { // also used for dense pose
+pub struct CocoObjectDetectionCategory {
+    // also used for dense pose
     pub id: i32,
     pub name: String,
     pub supercategory: String,
@@ -177,14 +168,10 @@ pub struct CocoPanopticSegmentationCategory {
     pub id: i32,
     pub name: String,
     pub supercategory: String,
-    #[serde(
-        deserialize_with = "bool_from_int",
-        serialize_with = "bool_to_int"
-    )]
+    #[serde(deserialize_with = "bool_from_int", serialize_with = "bool_to_int")]
     pub isthing: bool,
     pub color: [u8; 3],
 }
-
 
 // special types ///////////////////////////////////
 
@@ -194,13 +181,9 @@ pub struct CocoPanopticSegmentInfo {
     pub category_id: i32,
     pub area: u32,
     pub bbox: [f32; 4],
-    #[serde(
-        deserialize_with = "bool_from_int",
-        serialize_with = "bool_to_int"
-    )]
+    #[serde(deserialize_with = "bool_from_int", serialize_with = "bool_to_int")]
     pub iscrowd: bool,
 }
-
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(untagged)]
@@ -210,8 +193,8 @@ pub enum CocoSegmentation {
 }
 
 // Each polygon is a vector of [x1, y1, x2, y2, ..., xn, yn]
-type CocoPolygon = Vec<f32>; 
- 
+type CocoPolygon = Vec<f32>;
+
 // Run-length encoding for masks
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CocoRLE {
@@ -219,9 +202,7 @@ pub struct CocoRLE {
     pub size: (u32, u32),
 }
 
-
 // Methods for CocoFile ///////////////////////////////////
-
 
 pub struct IDMapEntry<'a> {
     pub id: i64,
@@ -283,7 +264,10 @@ where
     match v {
         0 => Ok(false),
         1 => Ok(true),
-        _ => Err(serde::de::Error::custom(format!("invalid bool value: {}", v))),
+        _ => Err(serde::de::Error::custom(format!(
+            "invalid bool value: {}",
+            v
+        ))),
     }
 }
 
@@ -523,7 +507,7 @@ mod tests {
     fn test_polygon_segmentation() {
         let json = r#"[[10.0, 10.0, 20.0, 10.0, 20.0, 20.0, 10.0, 20.0]]"#;
         let segmentation: CocoSegmentation = serde_json::from_str(json).unwrap();
-        
+
         match segmentation {
             CocoSegmentation::Polygon(polygons) => {
                 assert_eq!(polygons.len(), 1);
@@ -542,7 +526,7 @@ mod tests {
             "size": [640, 480]
         }"#;
         let segmentation: CocoSegmentation = serde_json::from_str(json).unwrap();
-        
+
         match segmentation {
             CocoSegmentation::RLE(rle) => {
                 assert_eq!(rle.counts.len(), 4);
@@ -628,7 +612,7 @@ mod tests {
             #[serde(serialize_with = "bool_to_int")]
             iscrowd: bool,
         }
-        
+
         let test_false = Test { iscrowd: false };
         let json = serde_json::to_string(&test_false).unwrap();
         assert!(json.contains("\"iscrowd\":0"));
@@ -763,14 +747,14 @@ mod tests {
         };
 
         let id_map = coco_file.make_id_map();
-        
+
         assert_eq!(id_map.len(), 2);
-        
+
         let entry1 = id_map.get(&1).unwrap();
         assert_eq!(entry1.id, 1);
         assert_eq!(entry1.image.file_name, "test1.jpg");
         assert_eq!(entry1.annotations.len(), 2);
-        
+
         let entry2 = id_map.get(&2).unwrap();
         assert_eq!(entry2.id, 2);
         assert_eq!(entry2.image.file_name, "test2.jpg");

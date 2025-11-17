@@ -19,6 +19,15 @@
         };
 
       in rec {
+        devShells.default = pkgs.mkShell {
+          buildInputs = with pkgs; [ 
+            # rustPkgs.cococrawl 
+            pre-commit
+            cargo
+            convco
+          ];
+        };
+
         packages = {
           cococrawl = (rustPkgs.workspace.cococrawl {});
           default = packages.cococrawl;

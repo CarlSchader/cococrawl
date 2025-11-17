@@ -36,6 +36,11 @@ struct Args {
     /// seed
     #[clap(short, long)]
     seed: Option<u64>,
+
+    /// annotated images only
+    /// if set, only images with at least one annotation will be included in the split
+    #[clap(short, long)]
+    annotated_only: bool,
 }
 
 fn main() {
@@ -79,6 +84,18 @@ fn main() {
             let mut rng = rng();
             id_map_entries.shuffle(&mut rng);
         }
+    };
+
+    // filter annotated only
+    let id_map_entries: Vec<_> = if args.annotated_only {
+        println!("Filtering to annotated images only...");
+        id_map_entries
+            .into_par_iter()
+            .progress()
+            .filter(|(_, entry)| !entry.annotations.is_empty())
+            .collect()
+    } else {
+        id_map_entries
     };
 
     let output_count = args.count.unwrap_or(id_map_entries.len());

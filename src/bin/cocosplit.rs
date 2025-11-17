@@ -33,9 +33,14 @@ struct Args {
     #[clap(short, long)]
     blacklist_file: Vec<PathBuf>,
 
-    /// seed
-    #[clap(short, long)]
-    seed: Option<u64>,
+    /// shuffle the images before splitting (with optional seed for reproducibility)
+    #[clap(long)]
+    shuffle: Option<Option<u64>>,
+
+    /// offset index to start at when splitting (only valid without shuffle)
+    /// if offset is 0, starts from the lowest image_id
+    #[clap(long, conflicts_with = "shuffle")]
+    offset: Option<usize>,
 
     /// annotated images only
     /// if set, only images with at least one annotation will be included in the split
@@ -74,17 +79,20 @@ fn main() {
         .filter(|(id, _)| !blacklisted_image_ids.contains(id))
         .collect();
 
-    // shuffle
-    match args.seed {
-        Some(seed) => {
-            let mut rng = StdRng::seed_from_u64(seed);
-            id_map_entries.shuffle(&mut rng);
+    if args.shuffle.is_some() {
+        match args.shuffle.unwrap() {
+            Some(seed) => {
+                let mut rng = StdRng::seed_from_u64(seed);
+                id_map_entries.shuffle(&mut rng);
+            }
+            None => {
+                let mut rng = rng();
+                id_map_entries.shuffle(&mut rng);
+            }
         }
-        None => {
-            let mut rng = rng();
-            id_map_entries.shuffle(&mut rng);
-        }
-    };
+    } else {
+        id_map_entries.sort_by_key(|(id, _)| *id);
+    }
 
     // filter annotated only
     let id_map_entries: Vec<_> = if args.annotated_only {
@@ -98,8 +106,13 @@ fn main() {
         id_map_entries
     };
 
-    let output_count = args.count.unwrap_or(id_map_entries.len());
-    let id_map_entries: Vec<_> = id_map_entries.iter().take(output_count).collect();
+    let offset = args.offset.unwrap_or(0);
+    let output_count = args.count.unwrap_or(id_map_entries.len().saturating_sub(offset));
+    let id_map_entries: Vec<_> = id_map_entries
+        .iter()
+        .skip(offset)
+        .take(output_count)
+        .collect();
 
     // Write updated COCO JSON to output directory
     let output_coco_file = CocoFile {

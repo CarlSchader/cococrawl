@@ -42,7 +42,16 @@ fn main() {
         .par_iter_mut()
         .progress_count(images_count)
         .for_each(|image| {
-            let src_path = PathBuf::from(&image.file_name);
+            // src_path is relative to the input coco json file location
+            // unless it's an absolute path
+            let src_path = if PathBuf::from(&image.file_name).is_absolute() {
+                PathBuf::from(&image.file_name)
+            } else {
+                args.coco_file
+                    .parent()
+                    .unwrap()
+                    .join(&image.file_name)
+            };
             if src_path.exists() && src_path.is_file() {
                 let file_extension = src_path
                     .extension()

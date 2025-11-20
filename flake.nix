@@ -1,8 +1,8 @@
 {
   inputs = {
-    cargo2nix.url = "github:cargo2nix/cargo2nix/release-0.12";
-    flake-utils.follows = "cargo2nix/flake-utils";
-    nixpkgs.follows = "cargo2nix/nixpkgs";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    crane.url = "github:ipetkov/crane";
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
   outputs = inputs: with inputs;
@@ -10,18 +10,12 @@
       let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [cargo2nix.overlays.default];
         };
 
-        rustPkgs = pkgs.rustBuilder.makePackageSet {
-          rustVersion = "1.85.0";
-          packageFun = import ./Cargo.nix;
-        };
-
-      in rec {
+        craneLib = crane.mkLib pkgs;
+      in {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [ 
-            # rustPkgs.cococrawl 
             pre-commit
             cargo
             convco
@@ -29,8 +23,9 @@
         };
 
         packages = {
-          cococrawl = (rustPkgs.workspace.cococrawl {});
-          default = packages.cococrawl;
+          default = craneLib.buildPackage {
+            src = craneLib.cleanCargoSource ./.;
+          };
         };
       }
     );

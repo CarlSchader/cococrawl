@@ -36,13 +36,20 @@ fn main() {
     }).collect(); 
 
     let mut seen_image_ids: HashSet<i64> = HashSet::new();
+
     let mut categories: HashSet<CocoCategory> = HashSet::new();
+    let mut largest_category_id: i64 = 0;
+
     let mut images: Vec<CocoImage> = Vec::new();
 
     coco_files.iter().for_each(|coco_file| {
-        let mut category_id_reemap: HashMap<>
+        let mut category_id_reemap: HashMap<>;
         coco_file.categories.iter().for_each(|category| {
-            categories.insert(category.clone());
+            if categories.contains(category) {
+                // Category already exists, skip
+            } else {
+                categories.insert(category.clone());
+            }
         });
     });
 

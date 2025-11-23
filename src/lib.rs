@@ -38,11 +38,23 @@ pub struct CocoImage {
     pub date_captured: DateTime<Utc>,
 }
 
+impl HasID for CocoImage {
+    fn id(&self) -> i64 {
+        self.id
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CocoLicense {
     pub id: i32,
     pub name: String,
     pub url: String,
+}
+
+impl HasID for CocoLicense {
+    fn id(&self) -> i64 {
+        self.id as i64
+    }
 }
 
 // annotation types ///////////////////////////////////
@@ -80,6 +92,12 @@ pub struct CocoObjectDetectionAnnotation {
     pub iscrowd: bool,
 }
 
+impl HasID for CocoObjectDetectionAnnotation {
+    fn id(&self) -> i64 {
+        self.id
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CocoKeypointDetectionAnnotation {
     pub id: i64,
@@ -95,6 +113,12 @@ pub struct CocoKeypointDetectionAnnotation {
     pub num_keypoints: u32,
 }
 
+impl HasID for CocoKeypointDetectionAnnotation {
+    fn id(&self) -> i64 {
+        self.id
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CocoPanopticSegmentationAnnotation {
     pub image_id: i64,
@@ -102,11 +126,23 @@ pub struct CocoPanopticSegmentationAnnotation {
     pub segments_info: Vec<CocoPanopticSegmentInfo>,
 }
 
+impl HasID for CocoPanopticSegmentationAnnotation {
+    fn id(&self) -> i64 {
+        self.image_id
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CocoImageCaptioningAnnotation {
     pub id: i64,
     pub image_id: i64,
     pub caption: String,
+}
+
+impl HasID for CocoImageCaptioningAnnotation {
+    fn id(&self) -> i64 {
+        self.id
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -136,9 +172,15 @@ pub struct CocoDensePoseAnnotation {
     pub dp_masks: Vec<CocoRLE>,
 }
 
+impl HasID for CocoDensePoseAnnotation {
+    fn id(&self) -> i64 {
+        self.id
+    }
+}
+
 // category types ///////////////////////////////////
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Hash, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum CocoCategory {
     KeypointDetection(CocoKeypointDetectionCategory),
@@ -146,7 +188,7 @@ pub enum CocoCategory {
     ObjectDetection(CocoObjectDetectionCategory),
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Hash)]
 pub struct CocoObjectDetectionCategory {
     // also used for dense pose
     pub id: i32,
@@ -154,7 +196,21 @@ pub struct CocoObjectDetectionCategory {
     pub supercategory: String,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+impl PartialEq for CocoObjectDetectionCategory {
+    fn eq(&self, other: &Self) -> bool {
+        self.supercategory == other.supercategory && self.name == other.name
+    }
+}
+
+impl Eq for CocoObjectDetectionCategory {}
+
+impl HasID for CocoObjectDetectionCategory {
+    fn id(&self) -> i64 {
+        self.id as i64
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Hash)]
 pub struct CocoKeypointDetectionCategory {
     pub id: i32,
     pub name: String,
@@ -163,7 +219,24 @@ pub struct CocoKeypointDetectionCategory {
     pub skeleton: Vec<[u32; 2]>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+impl PartialEq for CocoKeypointDetectionCategory {
+    fn eq(&self, other: &Self) -> bool {
+        let names_match = self.supercategory == other.supercategory && self.name == other.name;
+        let keypoints_match = self.keypoints == other.keypoints;
+        let skeleton_match = self.skeleton == other.skeleton;
+        names_match && keypoints_match && skeleton_match
+    }
+}
+
+impl Eq for CocoKeypointDetectionCategory {}
+
+impl HasID for CocoKeypointDetectionCategory {
+    fn id(&self) -> i64 {
+        self.id as i64
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Hash)]
 pub struct CocoPanopticSegmentationCategory {
     pub id: i32,
     pub name: String,
@@ -171,6 +244,23 @@ pub struct CocoPanopticSegmentationCategory {
     #[serde(deserialize_with = "bool_from_int", serialize_with = "bool_to_int")]
     pub isthing: bool,
     pub color: [u8; 3],
+}
+
+impl PartialEq for CocoPanopticSegmentationCategory {
+    fn eq(&self, other: &Self) -> bool {
+        let names_match = self.supercategory == other.supercategory && self.name == other.name;
+        let isthing_match = self.isthing == other.isthing;
+        let color_match = self.color == other.color;
+        names_match && isthing_match && color_match
+    }
+}
+
+impl Eq for CocoPanopticSegmentationCategory {}
+
+impl HasID for CocoPanopticSegmentationCategory {
+    fn id(&self) -> i64 {
+        self.id as i64
+    }
 }
 
 // special types ///////////////////////////////////
@@ -276,6 +366,10 @@ where
     S: Serializer,
 {
     serializer.serialize_i32(if *b { 1 } else { 0 })
+}
+
+trait HasID {
+    fn id(&self) -> i64;
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
 use clap::Parser;
-use cococrawl::{CocoCategory, CocoFile, CocoImage};
+use cococrawl::{CocoCategory, CocoFile, CocoImage, HasID, SetID};
 use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
 use serde_json;
@@ -37,20 +37,41 @@ fn main() {
 
     let mut seen_image_ids: HashSet<i64> = HashSet::new();
 
-    let mut categories: HashSet<CocoCategory> = HashSet::new();
-    let mut largest_category_id: i64 = 0;
+    // Categories don't hash on id but instead they hash on the everything else in the struct.
+    // This allows us to use this as a ground truth for making sure all categories have the same id
+    // across files.
+    let mut category_set: HashSet<CocoCategory> = HashSet::new(); 
+    let mut category_seen_ids: HashSet<i64> = HashSet::new();
+    let mut next_unseen_category_id: i64 = 0; // this can technically start at any number but we start at 0 for simplicity
 
     let mut images: Vec<CocoImage> = Vec::new();
 
     coco_files.iter().for_each(|coco_file| {
-        let mut category_id_reemap: HashMap<>;
-        coco_file.categories.iter().for_each(|category| {
-            if categories.contains(category) {
-                // Category already exists, skip
-            } else {
-                categories.insert(category.clone());
+        // remap category ids that clash
+        let mut category_id_remap: HashMap<i64, i64> = HashMap::new();
+        coco_file.categories.map(|categories| categories.iter().for_each(|category| {
+            if let Some(entry) = category_set.get(category) {                                                               
+                // Category id exists so we use the existing id
+                category_id_remap.insert(category.id(), entry.id());
+            } else { 
+                if category_seen_ids.contains(&category.id()) {
+                    // category hasn't been seen yet and it's id clashes with an existing category
+                    let mut new_category = category.clone();
+                    new_category.set_id(next_unseen_category_id);
+                    next_unseen_category_id += 1;
+                    category_id_remap.insert(category.id(), new_category.id());
+                } else {
+                    // category hasn't been seen yet and it's id doesn't clash
+                    category_seen_ids.insert(category.id());
+                    if category.id() >= next_unseen_category_id {
+                        next_unseen_category_id = category.id() + 1;
+                    }
+                    category_id_remap.insert(category.id(), category.id());
+                }
             }
-        });
+
+
+        }));
     });
 
     let output_coco_path =

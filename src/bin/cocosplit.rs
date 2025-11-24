@@ -107,7 +107,9 @@ fn main() {
     };
 
     let offset = args.offset.unwrap_or(0);
-    let output_count = args.count.unwrap_or(id_map_entries.len().saturating_sub(offset));
+    let output_count = args
+        .count
+        .unwrap_or(id_map_entries.len().saturating_sub(offset));
     let id_map_entries: Vec<_> = id_map_entries
         .iter()
         .skip(offset)

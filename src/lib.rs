@@ -138,7 +138,7 @@ impl HasCategoryID for CocoObjectDetectionAnnotation {
     fn set_category_id(&mut self, new_category_id: i32) {
         self.category_id = new_category_id;
     }
-} 
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CocoKeypointDetectionAnnotation {
@@ -203,9 +203,9 @@ impl HasID<i64> for CocoImageCaptioningAnnotation {
 pub struct CocoDensePoseAnnotation {
     pub id: i64,
     pub image_id: i64,
-    
+
     /// uses object detection categories
-    pub category_id: i32, 
+    pub category_id: i32,
 
     #[serde(deserialize_with = "bool_from_int", serialize_with = "bool_to_int")]
     pub iscrowd: bool,
@@ -489,7 +489,6 @@ pub trait HasCategoryID {
     fn category_id(&self) -> i32;
     fn set_category_id(&mut self, new_category_id: i32);
 }
-
 
 // Tests ///////////////////////////////////
 

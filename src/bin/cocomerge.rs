@@ -1,8 +1,10 @@
 use chrono::{Datelike, Utc};
 use clap::Parser;
-use cococrawl::{CocoAnnotation, CocoCategory, CocoFile, CocoImage, CocoInfo, CocoLicense, HasCategoryID, HasID};
-use indicatif::ParallelProgressIterator;
-use rayon::prelude::*;
+use cococrawl::{
+    CocoAnnotation, CocoCategory, CocoFile, CocoImage, CocoInfo, CocoLicense, HasCategoryID, HasID,
+};
+// use indicatif::ParallelProgressIterator;
+// use rayon::prelude::*;
 use serde_json;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -23,7 +25,7 @@ struct Args {
 
     /// If files contain clashing image ids, reassign ids to new unique ids
     /// If not set then clashing ids will be ignored and the image id from the first file will be
-    /// used 
+    /// used
     #[clap(short, long)]
     reassign_clashing_ids: bool,
 
@@ -35,20 +37,24 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    let coco_files: Vec<CocoFile> = args.coco_files.iter().map(|path| {
-        let coco_json = fs::read_to_string(path).expect("Could not read COCO JSON file");
-        serde_json::from_str(&coco_json).expect("Could not parse COCO JSON")
-    }).collect(); 
+    let coco_files: Vec<CocoFile> = args
+        .coco_files
+        .iter()
+        .map(|path| {
+            let coco_json = fs::read_to_string(path).expect("Could not read COCO JSON file");
+            serde_json::from_str(&coco_json).expect("Could not parse COCO JSON")
+        })
+        .collect();
 
     // Categories don't hash on id but instead they hash on the everything else in the struct.
     // This allows us to use this as a ground truth for making sure all categories have the same id
     // across files.
-    let mut category_set: HashSet<CocoCategory> = HashSet::new(); 
+    let mut category_set: HashSet<CocoCategory> = HashSet::new();
     let mut category_seen_ids: HashSet<i32> = HashSet::new();
     let mut next_unseen_category_id: i32 = 0; // this can technically start at any number but we start at 0 for simplicity
 
     // Licenses work the same way as categories
-    let mut license_set: HashSet<CocoLicense> = HashSet::new(); 
+    let mut license_set: HashSet<CocoLicense> = HashSet::new();
     let mut license_seen_ids: HashSet<i32> = HashSet::new();
     let mut next_unseen_license_id: i32 = 0;
 
@@ -66,10 +72,10 @@ fn main() {
         // categories logic
         let mut category_id_remap: HashMap<i32, i32> = HashMap::new();
         coco_file.categories.as_ref().map(|categories| categories.iter().for_each(|category| {
-            if let Some(entry) = category_set.get(category) {                                                               
+            if let Some(entry) = category_set.get(category) {
                 // category id exists so we use the existing id
                 category_id_remap.insert(category.id(), entry.id());
-            } else { 
+            } else {
                 if category_seen_ids.contains(&category.id()) {
                     // category hasn't been seen yet and it's id clashes with an existing category
                     let mut new_category = category.clone();
@@ -92,12 +98,12 @@ fn main() {
         // licenses logic
         let mut license_id_remap: HashMap<i32, i32> = HashMap::new();
         coco_file.licenses.iter().for_each(|license| {
-            if let Some(entry) = license_set.get(license) {                                                               
+            if let Some(entry) = license_set.get(license) {
                 // license id exists so we use the existing id
                 license_id_remap.insert(license.id(), entry.id());
-            } else { 
+            } else {
                 if license_seen_ids.contains(&license.id()) {
-                    // license hasn't been seen yet and it's id clashes with an existing license 
+                    // license hasn't been seen yet and it's id clashes with an existing license
                     let mut new_license = license.clone();
                     new_license.set_id(next_unseen_license_id);
                     next_unseen_license_id += 1;
@@ -133,8 +139,8 @@ fn main() {
             // handle license
             new_image.license = license_id_remap.get(&new_image.license)
                 .expect(format!(
-                    "License id {} not found in remap for image id {} in file {}", 
-                    new_image.license, 
+                    "License id {} not found in remap for image id {} in file {}",
+                    new_image.license,
                     new_image.id(),
                     coco_file_path.to_string_lossy(),
                 ).as_str())
@@ -177,8 +183,8 @@ fn main() {
                     CocoAnnotation::KeypointDetection(ref mut ann) => {
                         let new_category_id = *category_id_remap.get(&ann.category_id()).expect(
                             format!(
-                                "Category id {} not found in remap for annotation id {} in file {}", 
-                                ann.category_id(), 
+                                "Category id {} not found in remap for annotation id {} in file {}",
+                                ann.category_id(),
                                 ann.id(),
                                 coco_file_path.to_string_lossy(),
                             ).as_str()
@@ -200,8 +206,8 @@ fn main() {
                         ann.segments_info.iter_mut().for_each(|segment| {
                             let new_category_id = *category_id_remap.get(&segment.category_id).expect(
                                 format!(
-                                    "Category id {} not found in remap for segment info id {} in file {}", 
-                                    segment.category_id, 
+                                    "Category id {} not found in remap for segment info id {} in file {}",
+                                    segment.category_id,
                                     segment.id(),
                                     coco_file_path.to_string_lossy(),
                                 ).as_str()
@@ -238,7 +244,7 @@ fn main() {
                         let new_category_id = *category_id_remap.get(&ann.category_id()).expect(
                             format!(
                                 "Category id {} not found in remap for annotation id {} in file {}", 
-                                ann.category_id(), 
+                                ann.category_id(),
                                 ann.id(),
                                 coco_file_path.to_string_lossy(),
                             ).as_str()
@@ -260,7 +266,7 @@ fn main() {
                         let new_category_id = *category_id_remap.get(&ann.category_id()).expect(
                             format!(
                                 "Category id {} not found in remap for annotation id {} in file {}", 
-                                ann.category_id(), 
+                                ann.category_id(),
                                 ann.id(),
                                 coco_file_path.to_string_lossy(),
                             ).as_str()
@@ -300,10 +306,8 @@ fn main() {
         categories: Some(category_set.into_iter().collect()),
     };
 
-    let merged_path =
-        PathBuf::from(&args.output_path);
-    let output_file =
-        File::create(&merged_path).expect("Could not create output COCO JSON file");
+    let merged_path = PathBuf::from(&args.output_path);
+    let output_file = File::create(&merged_path).expect("Could not create output COCO JSON file");
     let writer = BufWriter::new(output_file);
     serde_json::to_writer_pretty(writer, &merged_file)
         .expect("Could not write COCO JSON to output file");

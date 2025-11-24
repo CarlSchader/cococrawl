@@ -47,10 +47,7 @@ fn main() {
             let src_path = if PathBuf::from(&image.file_name).is_absolute() {
                 PathBuf::from(&image.file_name)
             } else {
-                args.coco_file
-                    .parent()
-                    .unwrap()
-                    .join(&image.file_name)
+                args.coco_file.parent().unwrap().join(&image.file_name)
             };
             if src_path.exists() && src_path.is_file() {
                 let file_extension = src_path

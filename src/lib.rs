@@ -42,28 +42,32 @@ impl HasID for CocoImage {
     fn id(&self) -> i64 {
         self.id
     }
-}
 
-impl SetID for CocoImage {
     fn set_id(&mut self, new_id: i64) {
         self.id = new_id;
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Hash)]
 pub struct CocoLicense {
     pub id: i32,
     pub name: String,
     pub url: String,
 }
 
+impl PartialEq for CocoLicense {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.url == other.url
+    }
+}
+
+impl Eq for CocoLicense {}
+
 impl HasID for CocoLicense {
     fn id(&self) -> i64 {
         self.id as i64
     }
-}
 
-impl SetID for CocoLicense {
     fn set_id(&mut self, new_id: i64) {
         self.id = new_id as i32;
     }
@@ -89,6 +93,15 @@ impl CocoAnnotation {
             CocoAnnotation::ImageCaptioning(ann) => ann.image_id,
         }
     }
+
+    pub fn set_image_id(&mut self, new_image_id: i64) {
+        match self {
+            CocoAnnotation::ObjectDetection(ann) => ann.image_id = new_image_id,
+            CocoAnnotation::KeypointDetection(ann) => ann.image_id = new_image_id,
+            CocoAnnotation::PanopticSegmentation(ann) => ann.image_id = new_image_id,
+            CocoAnnotation::ImageCaptioning(ann) => ann.image_id = new_image_id,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -108,13 +121,21 @@ impl HasID for CocoObjectDetectionAnnotation {
     fn id(&self) -> i64 {
         self.id
     }
-}
 
-impl SetID for CocoObjectDetectionAnnotation {
     fn set_id(&mut self, new_id: i64) {
         self.id = new_id;
     }
 }
+
+impl HasCategoryID for CocoObjectDetectionAnnotation {
+    fn category_id(&self) -> i64 {
+        self.category_id as i64
+    }
+
+    fn set_category_id(&mut self, new_category_id: i64) {
+        self.category_id = new_category_id as i32;
+    }
+} 
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CocoKeypointDetectionAnnotation {
@@ -135,11 +156,19 @@ impl HasID for CocoKeypointDetectionAnnotation {
     fn id(&self) -> i64 {
         self.id
     }
-}
 
-impl SetID for CocoKeypointDetectionAnnotation {
     fn set_id(&mut self, new_id: i64) {
         self.id = new_id;
+    }
+}
+
+impl HasCategoryID for CocoKeypointDetectionAnnotation {
+    fn category_id(&self) -> i64 {
+        self.category_id as i64
+    }
+
+    fn set_category_id(&mut self, new_category_id: i64) {
+        self.category_id = new_category_id as i32;
     }
 }
 
@@ -161,9 +190,7 @@ impl HasID for CocoImageCaptioningAnnotation {
     fn id(&self) -> i64 {
         self.id
     }
-}
 
-impl SetID for CocoImageCaptioningAnnotation {
     fn set_id(&mut self, new_id: i64) {
         self.id = new_id;
     }
@@ -200,11 +227,19 @@ impl HasID for CocoDensePoseAnnotation {
     fn id(&self) -> i64 {
         self.id
     }
-}
 
-impl SetID for CocoDensePoseAnnotation {
     fn set_id(&mut self, new_id: i64) {
         self.id = new_id;
+    }
+}
+
+impl HasCategoryID for CocoDensePoseAnnotation {
+    fn category_id(&self) -> i64 {
+        self.category_id as i64
+    }
+
+    fn set_category_id(&mut self, new_category_id: i64) {
+        self.category_id = new_category_id as i32;
     }
 }
 
@@ -226,9 +261,7 @@ impl HasID for CocoCategory {
             CocoCategory::PanopticSegmentation(cat) => cat.id(),
         }
     }
-}
 
-impl SetID for CocoCategory {
     fn set_id(&mut self, new_id: i64) {
         match self {
             CocoCategory::ObjectDetection(cat) => cat.set_id(new_id),
@@ -258,9 +291,7 @@ impl HasID for CocoObjectDetectionCategory {
     fn id(&self) -> i64 {
         self.id as i64
     }
-}
 
-impl SetID for CocoObjectDetectionCategory {
     fn set_id(&mut self, new_id: i64) {
         self.id = new_id as i32;
     }
@@ -290,9 +321,7 @@ impl HasID for CocoKeypointDetectionCategory {
     fn id(&self) -> i64 {
         self.id as i64
     }
-}
 
-impl SetID for CocoKeypointDetectionCategory {
     fn set_id(&mut self, new_id: i64) {
         self.id = new_id as i32;
     }
@@ -323,9 +352,7 @@ impl HasID for CocoPanopticSegmentationCategory {
     fn id(&self) -> i64 {
         self.id as i64
     }
-}
 
-impl SetID for CocoPanopticSegmentationCategory {
     fn set_id(&mut self, new_id: i64) {
         self.id = new_id as i32;
     }
@@ -436,13 +463,20 @@ where
     serializer.serialize_i32(if *b { 1 } else { 0 })
 }
 
+// Traits ///////////////////////////////////
+
 pub trait HasID {
     fn id(&self) -> i64;
-}
-
-pub trait SetID: HasID {
     fn set_id(&mut self, new_id: i64);
 }
+
+pub trait HasCategoryID {
+    fn category_id(&self) -> i64;
+    fn set_category_id(&mut self, new_category_id: i64);
+}
+
+
+// Tests ///////////////////////////////////
 
 #[cfg(test)]
 mod tests {

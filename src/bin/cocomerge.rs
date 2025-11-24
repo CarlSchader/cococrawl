@@ -1,5 +1,6 @@
+use chrono::{Datelike, Utc};
 use clap::Parser;
-use cococrawl::{CocoAnnotation, CocoCategory, CocoFile, CocoImage, CocoLicense, HasID, SetID};
+use cococrawl::{CocoAnnotation, CocoCategory, CocoFile, CocoImage, CocoInfo, CocoLicense, HasCategoryID, HasID};
 use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
 use serde_json;
@@ -25,6 +26,10 @@ struct Args {
     /// used 
     #[clap(short, long)]
     reassign_clashing_ids: bool,
+
+    /// Version string for the COCO info section
+    #[clap(short, long, default_value = "1.0.0")]
+    version_string: String,
 }
 
 fn main() {
@@ -35,30 +40,32 @@ fn main() {
         serde_json::from_str(&coco_json).expect("Could not parse COCO JSON")
     }).collect(); 
 
-    let mut seen_image_ids: HashSet<i64> = HashSet::new();
-
     // Categories don't hash on id but instead they hash on the everything else in the struct.
     // This allows us to use this as a ground truth for making sure all categories have the same id
     // across files.
     let mut category_set: HashSet<CocoCategory> = HashSet::new(); 
-    let mut category_seen_ids: HashSet<i64> = HashSet::new();
-    let mut next_unseen_category_id: i64 = 0; // this can technically start at any number but we start at 0 for simplicity
+    let mut category_seen_ids: HashSet<i32> = HashSet::new();
+    let mut next_unseen_category_id: i32 = 0; // this can technically start at any number but we start at 0 for simplicity
 
     // Licenses work the same way as categories
     let mut license_set: HashSet<CocoLicense> = HashSet::new(); 
-    let mut license_seen_ids: HashSet<i64> = HashSet::new();
-    let mut next_unseen_license_id: i64 = 0; // this can technically start at any number but we start at 0 for simplicity
+    let mut license_seen_ids: HashSet<i32> = HashSet::new();
+    let mut next_unseen_license_id: i32 = 0;
 
     let mut images: Vec<CocoImage> = Vec::new();
     let mut seen_image_ids: HashSet<i64> = HashSet::new();
-    let mut next_unseen_image_id: i64 = 0; // this can technically start at any number but we start at 0 for simplicity
+    let mut next_unseen_image_id: i64 = 0;
+
+    let mut annotations: Vec<CocoAnnotation> = Vec::new();
+    let mut seen_annotation_ids: HashSet<i64> = HashSet::new();
+    let mut next_unseen_annotation_id: i64 = 0;
 
     coco_files.iter().enumerate().for_each(|(file_index, coco_file)| {
         let coco_file_path = &args.coco_files[file_index];
 
-        // remap category ids that clash
-        let mut category_id_remap: HashMap<i64, i64> = HashMap::new();
-        coco_file.categories.map(|categories| categories.iter().for_each(|category| {
+        // categories logic
+        let mut category_id_remap: HashMap<i32, i32> = HashMap::new();
+        coco_file.categories.as_ref().map(|categories| categories.iter().for_each(|category| {
             if let Some(entry) = category_set.get(category) {                                                               
                 // category id exists so we use the existing id
                 category_id_remap.insert(category.id(), entry.id());
@@ -69,6 +76,7 @@ fn main() {
                     new_category.set_id(next_unseen_category_id);
                     next_unseen_category_id += 1;
                     category_id_remap.insert(category.id(), new_category.id());
+                    category_set.insert(new_category);
                 } else {
                     // category hasn't been seen yet and it's id doesn't clash
                     category_seen_ids.insert(category.id());
@@ -76,12 +84,13 @@ fn main() {
                         next_unseen_category_id = category.id() + 1;
                     }
                     category_id_remap.insert(category.id(), category.id());
+                    category_set.insert(category.clone());
                 }
             }
         }));
 
-        // remap license ids that clash
-        let mut license_id_remap: HashMap<i64, i64> = HashMap::new();
+        // licenses logic
+        let mut license_id_remap: HashMap<i32, i32> = HashMap::new();
         coco_file.licenses.iter().for_each(|license| {
             if let Some(entry) = license_set.get(license) {                                                               
                 // license id exists so we use the existing id
@@ -93,6 +102,7 @@ fn main() {
                     new_license.set_id(next_unseen_license_id);
                     next_unseen_license_id += 1;
                     license_id_remap.insert(license.id(), new_license.id());
+                    license_set.insert(new_license);
                 } else {
                     // license hasn't been seen yet and it's id doesn't clash
                     license_seen_ids.insert(license.id());
@@ -100,10 +110,12 @@ fn main() {
                         next_unseen_license_id = license.id() + 1;
                     }
                     license_id_remap.insert(license.id(), license.id());
+                    license_set.insert(license.clone());
                 }
             }
         });
 
+        // images logic
         let mut image_id_remap: HashMap<i64, i64> = HashMap::new();
         coco_file.images.iter().for_each(|image| {
             let mut new_image = image.clone();
@@ -119,14 +131,14 @@ fn main() {
             }.to_string_lossy().to_string();
 
             // handle license
-            new_image.license = license_id_remap.get(&(new_image.license as i64))
+            new_image.license = license_id_remap.get(&new_image.license)
                 .expect(format!(
                     "License id {} not found in remap for image id {} in file {}", 
                     new_image.license, 
                     new_image.id(),
                     coco_file_path.to_string_lossy(),
                 ).as_str())
-                .clone() as i32;
+                .clone();
 
             if seen_image_ids.contains(&image.id()) {
                 if args.reassign_clashing_ids {
@@ -144,49 +156,155 @@ fn main() {
                     );
                 }
             } else {
-                images.push(new_image);
                 if new_image.id() >= next_unseen_image_id {
                     next_unseen_image_id = new_image.id() + 1;
                 }
                 seen_image_ids.insert(new_image.id());
                 image_id_remap.insert(image.id(), new_image.id());
+                images.push(new_image);
             }
         });
 
+        // annotations logic
         coco_file.annotations.iter().for_each(|annotation| {
             // only add annotation if its image id was added
             if let Some(new_annotation_id) = image_id_remap.get(&annotation.image_id()) {
                 let mut new_annotation = annotation.clone();
                 new_annotation.set_image_id(*new_annotation_id);
 
-                // handle category id remapping
+                // handle category id remappings and annotation id remapping
                 match new_annotation {
-                    CocoAnnotation::KeypointDetection(ref mut ann) => {},
-                    CocoAnnotation::PanopticSegmentation(ref mut ann) => {},
-                    CocoAnnotation::ImageCaptioning(ref mut ann) => {},
-                    CocoAnnotation::ObjectDetection(ref mut ann) => {},
+                    CocoAnnotation::KeypointDetection(ref mut ann) => {
+                        let new_category_id = *category_id_remap.get(&ann.category_id()).expect(
+                            format!(
+                                "Category id {} not found in remap for annotation id {} in file {}", 
+                                ann.category_id(), 
+                                ann.id(),
+                                coco_file_path.to_string_lossy(),
+                            ).as_str()
+                        );
+                        ann.set_category_id(new_category_id);
+
+                        if seen_annotation_ids.contains(&ann.id()) {
+                            ann.set_id(next_unseen_annotation_id);
+                            next_unseen_annotation_id += 1;
+                            seen_annotation_ids.insert(ann.id());
+                        } else {
+                            if ann.id() >= next_unseen_annotation_id {
+                                next_unseen_annotation_id = ann.id() + 1;
+                            }
+                            seen_annotation_ids.insert(ann.id());
+                        }
+                    },
+                    CocoAnnotation::PanopticSegmentation(ref mut ann) => {
+                        ann.segments_info.iter_mut().for_each(|segment| {
+                            let new_category_id = *category_id_remap.get(&segment.category_id).expect(
+                                format!(
+                                    "Category id {} not found in remap for segment info id {} in file {}", 
+                                    segment.category_id, 
+                                    segment.id(),
+                                    coco_file_path.to_string_lossy(),
+                                ).as_str()
+                            );
+                            segment.category_id = new_category_id;
+
+                            // special case. We want unique segment ids across the whole dataset
+                            // including other annotation types
+                            if seen_annotation_ids.contains(&segment.id()) {
+                                segment.set_id(next_unseen_annotation_id);
+                                next_unseen_annotation_id += 1;
+                                seen_annotation_ids.insert(segment.id());
+                            } else {
+                                if segment.id() >= next_unseen_annotation_id {
+                                    next_unseen_annotation_id = segment.id() + 1;
+                                }
+                                seen_annotation_ids.insert(segment.id());
+                            }
+                        });
+                    },
+                    CocoAnnotation::ImageCaptioning(ref mut ann) => {
+                        if seen_annotation_ids.contains(&ann.id()) {
+                            ann.set_id(next_unseen_annotation_id);
+                            next_unseen_annotation_id += 1;
+                            seen_annotation_ids.insert(ann.id());
+                        } else {
+                            if ann.id() >= next_unseen_annotation_id {
+                                next_unseen_annotation_id = ann.id() + 1;
+                            }
+                            seen_annotation_ids.insert(ann.id());
+                        }
+                    },
+                    CocoAnnotation::ObjectDetection(ref mut ann) => {
+                        let new_category_id = *category_id_remap.get(&ann.category_id()).expect(
+                            format!(
+                                "Category id {} not found in remap for annotation id {} in file {}", 
+                                ann.category_id(), 
+                                ann.id(),
+                                coco_file_path.to_string_lossy(),
+                            ).as_str()
+                        );
+                        ann.set_category_id(new_category_id);
+
+                        if seen_annotation_ids.contains(&ann.id()) {
+                            ann.set_id(next_unseen_annotation_id);
+                            next_unseen_annotation_id += 1;
+                            seen_annotation_ids.insert(ann.id());
+                        } else {
+                            if ann.id() >= next_unseen_annotation_id {
+                                next_unseen_annotation_id = ann.id() + 1;
+                            }
+                            seen_annotation_ids.insert(ann.id());
+                        }
+                    },
+                    CocoAnnotation::DensePose(ref mut ann) => {
+                        let new_category_id = *category_id_remap.get(&ann.category_id()).expect(
+                            format!(
+                                "Category id {} not found in remap for annotation id {} in file {}", 
+                                ann.category_id(), 
+                                ann.id(),
+                                coco_file_path.to_string_lossy(),
+                            ).as_str()
+                        );
+                        ann.set_category_id(new_category_id);
+
+                        if seen_annotation_ids.contains(&ann.id()) {
+                            ann.set_id(next_unseen_annotation_id);
+                            next_unseen_annotation_id += 1;
+                            seen_annotation_ids.insert(ann.id());
+                        } else {
+                            if ann.id() >= next_unseen_annotation_id {
+                                next_unseen_annotation_id = ann.id() + 1;
+                            }
+                            seen_annotation_ids.insert(ann.id());
+                        }
+                    },
                 }
+
+                annotations.push(new_annotation);
             }
-
-                // remap category id
-                new_annotation.category_id = *category_id_remap.get(&annotation.category_id).expect(
-                    format!(
-                        "Category id {} not found in remap for annotation id {} in file {}", 
-                        annotation.category_id, 
-                        annotation.id(),
-                        coco_file_path.to_string_lossy(),
-                    ).as_str()
-                );
-
-                coco_file.annotations.push(new_annotation);
         });
     });
 
-    let output_coco_path =
-        PathBuf::from(&args.output_dir_path).join(coco_json_file_name.to_string());
+    let merged_file = CocoFile {
+        info: CocoInfo {
+            year: Utc::now().year(),
+            version: args.version_string,
+            description: "".to_string(),
+            contributor: "".to_string(),
+            url: "".to_string(),
+            date_created: Utc::now(),
+        },
+        licenses: license_set.into_iter().collect(),
+        images,
+        annotations,
+        categories: Some(category_set.into_iter().collect()),
+    };
+
+    let merged_path =
+        PathBuf::from(&args.output_path);
     let output_file =
-        File::create(&output_coco_path).expect("Could not create output COCO JSON file");
+        File::create(&merged_path).expect("Could not create output COCO JSON file");
     let writer = BufWriter::new(output_file);
-    serde_json::to_writer_pretty(writer, &coco_file)
+    serde_json::to_writer_pretty(writer, &merged_file)
         .expect("Could not write COCO JSON to output file");
 }

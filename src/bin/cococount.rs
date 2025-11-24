@@ -24,7 +24,7 @@ fn main() {
     let images_count = coco_file.images.len() as u64;
 
     let annotations_count = coco_file.annotations.len() as u64;
-    let annotation_counts: &mut [u64] = &mut [0; 4];
+    let annotation_counts: &mut [u64] = &mut [0; 5];
     coco_file
         .annotations
         .iter()
@@ -33,6 +33,7 @@ fn main() {
             CocoAnnotation::KeypointDetection(_) => annotation_counts[1] += 1,
             CocoAnnotation::PanopticSegmentation(_) => annotation_counts[2] += 1,
             CocoAnnotation::ImageCaptioning(_) => annotation_counts[3] += 1,
+            CocoAnnotation::DensePose(_) => annotation_counts[4] += 1,
         });
 
     let categories_count: &mut [u64] = &mut [0; 3];
@@ -58,6 +59,7 @@ fn main() {
         annotation_counts[2]
     );
     println!("  Image Captioning Annotations: {}", annotation_counts[3]);
+    println!("  DensePose Annotations: {}", annotation_counts[4]);
 
     println!("Categories: {}", category_count);
     println!("  Object Detection Categories: {}", categories_count[0]);

@@ -38,7 +38,7 @@ pub struct CocoImage {
     pub date_captured: DateTime<Utc>,
 }
 
-impl HasID for CocoImage {
+impl HasID<i64> for CocoImage {
     fn id(&self) -> i64 {
         self.id
     }
@@ -63,13 +63,13 @@ impl PartialEq for CocoLicense {
 
 impl Eq for CocoLicense {}
 
-impl HasID for CocoLicense {
-    fn id(&self) -> i64 {
-        self.id as i64
+impl HasID<i32> for CocoLicense {
+    fn id(&self) -> i32 {
+        self.id
     }
 
-    fn set_id(&mut self, new_id: i64) {
-        self.id = new_id as i32;
+    fn set_id(&mut self, new_id: i32) {
+        self.id = new_id;
     }
 }
 
@@ -82,6 +82,7 @@ pub enum CocoAnnotation {
     PanopticSegmentation(CocoPanopticSegmentationAnnotation),
     ImageCaptioning(CocoImageCaptioningAnnotation),
     ObjectDetection(CocoObjectDetectionAnnotation),
+    DensePose(CocoDensePoseAnnotation),
 }
 
 impl CocoAnnotation {
@@ -91,6 +92,7 @@ impl CocoAnnotation {
             CocoAnnotation::KeypointDetection(ann) => ann.image_id,
             CocoAnnotation::PanopticSegmentation(ann) => ann.image_id,
             CocoAnnotation::ImageCaptioning(ann) => ann.image_id,
+            CocoAnnotation::DensePose(ann) => ann.image_id,
         }
     }
 
@@ -100,6 +102,7 @@ impl CocoAnnotation {
             CocoAnnotation::KeypointDetection(ann) => ann.image_id = new_image_id,
             CocoAnnotation::PanopticSegmentation(ann) => ann.image_id = new_image_id,
             CocoAnnotation::ImageCaptioning(ann) => ann.image_id = new_image_id,
+            CocoAnnotation::DensePose(ann) => ann.image_id = new_image_id,
         }
     }
 }
@@ -117,7 +120,7 @@ pub struct CocoObjectDetectionAnnotation {
     pub iscrowd: bool,
 }
 
-impl HasID for CocoObjectDetectionAnnotation {
+impl HasID<i64> for CocoObjectDetectionAnnotation {
     fn id(&self) -> i64 {
         self.id
     }
@@ -128,12 +131,12 @@ impl HasID for CocoObjectDetectionAnnotation {
 }
 
 impl HasCategoryID for CocoObjectDetectionAnnotation {
-    fn category_id(&self) -> i64 {
-        self.category_id as i64
+    fn category_id(&self) -> i32 {
+        self.category_id
     }
 
-    fn set_category_id(&mut self, new_category_id: i64) {
-        self.category_id = new_category_id as i32;
+    fn set_category_id(&mut self, new_category_id: i32) {
+        self.category_id = new_category_id;
     }
 } 
 
@@ -152,7 +155,7 @@ pub struct CocoKeypointDetectionAnnotation {
     pub num_keypoints: u32,
 }
 
-impl HasID for CocoKeypointDetectionAnnotation {
+impl HasID<i64> for CocoKeypointDetectionAnnotation {
     fn id(&self) -> i64 {
         self.id
     }
@@ -163,12 +166,12 @@ impl HasID for CocoKeypointDetectionAnnotation {
 }
 
 impl HasCategoryID for CocoKeypointDetectionAnnotation {
-    fn category_id(&self) -> i64 {
-        self.category_id as i64
+    fn category_id(&self) -> i32 {
+        self.category_id
     }
 
-    fn set_category_id(&mut self, new_category_id: i64) {
-        self.category_id = new_category_id as i32;
+    fn set_category_id(&mut self, new_category_id: i32) {
+        self.category_id = new_category_id;
     }
 }
 
@@ -186,7 +189,7 @@ pub struct CocoImageCaptioningAnnotation {
     pub caption: String,
 }
 
-impl HasID for CocoImageCaptioningAnnotation {
+impl HasID<i64> for CocoImageCaptioningAnnotation {
     fn id(&self) -> i64 {
         self.id
     }
@@ -200,7 +203,9 @@ impl HasID for CocoImageCaptioningAnnotation {
 pub struct CocoDensePoseAnnotation {
     pub id: i64,
     pub image_id: i64,
-    pub category_id: i32,
+    
+    /// uses object detection categories
+    pub category_id: i32, 
 
     #[serde(deserialize_with = "bool_from_int", serialize_with = "bool_to_int")]
     pub iscrowd: bool,
@@ -223,7 +228,7 @@ pub struct CocoDensePoseAnnotation {
     pub dp_masks: Vec<CocoRLE>,
 }
 
-impl HasID for CocoDensePoseAnnotation {
+impl HasID<i64> for CocoDensePoseAnnotation {
     fn id(&self) -> i64 {
         self.id
     }
@@ -234,12 +239,12 @@ impl HasID for CocoDensePoseAnnotation {
 }
 
 impl HasCategoryID for CocoDensePoseAnnotation {
-    fn category_id(&self) -> i64 {
-        self.category_id as i64
+    fn category_id(&self) -> i32 {
+        self.category_id
     }
 
-    fn set_category_id(&mut self, new_category_id: i64) {
-        self.category_id = new_category_id as i32;
+    fn set_category_id(&mut self, new_category_id: i32) {
+        self.category_id = new_category_id;
     }
 }
 
@@ -253,8 +258,8 @@ pub enum CocoCategory {
     ObjectDetection(CocoObjectDetectionCategory),
 }
 
-impl HasID for CocoCategory {
-    fn id(&self) -> i64 {
+impl HasID<i32> for CocoCategory {
+    fn id(&self) -> i32 {
         match self {
             CocoCategory::ObjectDetection(cat) => cat.id(),
             CocoCategory::KeypointDetection(cat) => cat.id(),
@@ -262,7 +267,7 @@ impl HasID for CocoCategory {
         }
     }
 
-    fn set_id(&mut self, new_id: i64) {
+    fn set_id(&mut self, new_id: i32) {
         match self {
             CocoCategory::ObjectDetection(cat) => cat.set_id(new_id),
             CocoCategory::KeypointDetection(cat) => cat.set_id(new_id),
@@ -287,13 +292,13 @@ impl PartialEq for CocoObjectDetectionCategory {
 
 impl Eq for CocoObjectDetectionCategory {}
 
-impl HasID for CocoObjectDetectionCategory {
-    fn id(&self) -> i64 {
-        self.id as i64
+impl HasID<i32> for CocoObjectDetectionCategory {
+    fn id(&self) -> i32 {
+        self.id
     }
 
-    fn set_id(&mut self, new_id: i64) {
-        self.id = new_id as i32;
+    fn set_id(&mut self, new_id: i32) {
+        self.id = new_id;
     }
 }
 
@@ -317,13 +322,13 @@ impl PartialEq for CocoKeypointDetectionCategory {
 
 impl Eq for CocoKeypointDetectionCategory {}
 
-impl HasID for CocoKeypointDetectionCategory {
-    fn id(&self) -> i64 {
-        self.id as i64
+impl HasID<i32> for CocoKeypointDetectionCategory {
+    fn id(&self) -> i32 {
+        self.id
     }
 
-    fn set_id(&mut self, new_id: i64) {
-        self.id = new_id as i32;
+    fn set_id(&mut self, new_id: i32) {
+        self.id = new_id;
     }
 }
 
@@ -348,13 +353,13 @@ impl PartialEq for CocoPanopticSegmentationCategory {
 
 impl Eq for CocoPanopticSegmentationCategory {}
 
-impl HasID for CocoPanopticSegmentationCategory {
-    fn id(&self) -> i64 {
-        self.id as i64
+impl HasID<i32> for CocoPanopticSegmentationCategory {
+    fn id(&self) -> i32 {
+        self.id
     }
 
-    fn set_id(&mut self, new_id: i64) {
-        self.id = new_id as i32;
+    fn set_id(&mut self, new_id: i32) {
+        self.id = new_id;
     }
 }
 
@@ -368,6 +373,16 @@ pub struct CocoPanopticSegmentInfo {
     pub bbox: [f32; 4],
     #[serde(deserialize_with = "bool_from_int", serialize_with = "bool_to_int")]
     pub iscrowd: bool,
+}
+
+impl HasID<i64> for CocoPanopticSegmentInfo {
+    fn id(&self) -> i64 {
+        self.id
+    }
+
+    fn set_id(&mut self, new_id: i64) {
+        self.id = new_id;
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -465,14 +480,14 @@ where
 
 // Traits ///////////////////////////////////
 
-pub trait HasID {
-    fn id(&self) -> i64;
-    fn set_id(&mut self, new_id: i64);
+pub trait HasID<T> {
+    fn id(&self) -> T;
+    fn set_id(&mut self, new_id: T);
 }
 
 pub trait HasCategoryID {
-    fn category_id(&self) -> i64;
-    fn set_category_id(&mut self, new_category_id: i64);
+    fn category_id(&self) -> i32;
+    fn set_category_id(&mut self, new_category_id: i32);
 }
 
 

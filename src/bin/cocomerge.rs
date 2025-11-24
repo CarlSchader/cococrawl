@@ -97,7 +97,7 @@ fn main() {
 
         // licenses logic
         let mut license_id_remap: HashMap<i32, i32> = HashMap::new();
-        coco_file.licenses.iter().for_each(|license| {
+        coco_file.licenses.as_ref().map(|licenses| licenses.iter().for_each(|license| {
             if let Some(entry) = license_set.get(license) {
                 // license id exists so we use the existing id
                 license_id_remap.insert(license.id(), entry.id());
@@ -119,7 +119,7 @@ fn main() {
                     license_set.insert(license.clone());
                 }
             }
-        });
+        }));
 
         // images logic
         let mut image_id_remap: HashMap<i64, i64> = HashMap::new();
@@ -137,14 +137,16 @@ fn main() {
             }.to_string_lossy().to_string();
 
             // handle license
-            new_image.license = license_id_remap.get(&new_image.license)
-                .expect(format!(
-                    "License id {} not found in remap for image id {} in file {}",
-                    new_image.license,
-                    new_image.id(),
-                    coco_file_path.to_string_lossy(),
-                ).as_str())
-                .clone();
+            if let Some(new_license_id) = new_image.license {
+                new_image.license = Some(license_id_remap.get(&new_license_id)
+                    .expect(format!(
+                        "License id {} not found in remap for image id {} in file {}",
+                        new_license_id,
+                        new_image.id(),
+                        coco_file_path.to_string_lossy(),
+                    ).as_str())
+                    .clone());
+            }
 
             if seen_image_ids.contains(&image.id()) {
                 if args.reassign_clashing_ids {
@@ -292,15 +294,15 @@ fn main() {
     });
 
     let merged_file = CocoFile {
-        info: CocoInfo {
+        info: Some(CocoInfo {
             year: Utc::now().year(),
             version: args.version_string,
             description: "".to_string(),
             contributor: "".to_string(),
             url: "".to_string(),
             date_created: Utc::now(),
-        },
-        licenses: license_set.into_iter().collect(),
+        }),
+        licenses: Some(license_set.into_iter().collect()),
         images,
         annotations,
         categories: Some(category_set.into_iter().collect()),

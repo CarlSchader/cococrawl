@@ -74,8 +74,7 @@ fn main() {
         .enumerate()
         .map(|(id, file_path)| {
             let metadata = fs::metadata(file_path).unwrap();
-            let date_created = metadata
-                .created().ok();
+            let date_created = metadata.created().ok();
             let date_created = date_created.map(|dt| DateTime::<Utc>::from(dt));
 
             let (width, height) = ImageReader::open(file_path)

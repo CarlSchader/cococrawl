@@ -75,8 +75,8 @@ fn main() {
         .map(|(id, file_path)| {
             let metadata = fs::metadata(file_path).unwrap();
             let date_created = metadata
-                .created()
-                .unwrap_or_else(|_| std::time::SystemTime::now());
+                .created().ok();
+            let date_created = date_created.map(|dt| DateTime::<Utc>::from(dt));
 
             let (width, height) = ImageReader::open(file_path)
                 .unwrap()
@@ -90,10 +90,10 @@ fn main() {
                 width,
                 height,
                 file_name: file_path.to_string_lossy().to_string(),
-                license: 0,
-                flickr_url: String::new(),
-                coco_url: String::new(),
-                date_captured: DateTime::<Utc>::from(date_created),
+                license: None,
+                flickr_url: None,
+                coco_url: None,
+                date_captured: date_created,
             }
         })
         .collect();
@@ -108,11 +108,11 @@ fn main() {
     };
 
     let coco_file = CocoFile {
-        info: coco_info,
+        info: Some(coco_info),
         images,
         annotations: Vec::new(),
         categories: None,
-        licenses: Vec::new(),
+        licenses: None,
     };
 
     let writer = BufWriter::new(output_file);

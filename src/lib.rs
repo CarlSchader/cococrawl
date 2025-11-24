@@ -6,14 +6,17 @@ use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CocoFile {
-    pub info: CocoInfo,
     pub images: Vec<CocoImage>,
     pub annotations: Vec<CocoAnnotation>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub info: Option<CocoInfo>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub categories: Option<Vec<CocoCategory>>,
 
-    pub licenses: Vec<CocoLicense>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub licenses: Option<Vec<CocoLicense>>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -32,10 +35,18 @@ pub struct CocoImage {
     pub width: u32,
     pub height: u32,
     pub file_name: String,
-    pub license: i32,
-    pub flickr_url: String,
-    pub coco_url: String,
-    pub date_captured: DateTime<Utc>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub license: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flickr_url: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub coco_url: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub date_captured: Option<DateTime<Utc>>,
 }
 
 impl HasID<i64> for CocoImage {
@@ -550,7 +561,7 @@ mod tests {
         assert_eq!(image.width, 640);
         assert_eq!(image.height, 480);
         assert_eq!(image.file_name, "test.jpg");
-        assert_eq!(image.license, 1);
+        assert_eq!(image.license, Some(1));
     }
 
     #[test]
@@ -877,10 +888,10 @@ mod tests {
         }"#;
 
         let coco_file: CocoFile = serde_json::from_str(json).unwrap();
-        assert_eq!(coco_file.info.year, 2020);
+        assert_eq!(coco_file.info.unwrap().year, 2020);
         assert_eq!(coco_file.images.len(), 1);
         assert_eq!(coco_file.annotations.len(), 1);
-        assert_eq!(coco_file.licenses.len(), 0);
+        assert_eq!(coco_file.licenses.unwrap().len(), 0);
         assert!(coco_file.categories.is_some());
         assert_eq!(coco_file.categories.unwrap().len(), 1);
     }
@@ -909,35 +920,35 @@ mod tests {
     #[test]
     fn test_make_id_map() {
         let coco_file = CocoFile {
-            info: CocoInfo {
+            info: Some(CocoInfo {
                 year: 2020,
                 version: "1.0".to_string(),
                 description: "Test".to_string(),
                 contributor: "Test".to_string(),
                 url: "http://test.com".to_string(),
                 date_created: Utc::now(),
-            },
-            licenses: vec![],
+            }),
+            licenses: Some(vec![]),
             images: vec![
                 CocoImage {
                     id: 1,
                     width: 640,
                     height: 480,
                     file_name: "test1.jpg".to_string(),
-                    license: 0,
-                    flickr_url: "".to_string(),
-                    coco_url: "".to_string(),
-                    date_captured: Utc::now(),
+                    license: Some(0),
+                    flickr_url: Some("".to_string()),
+                    coco_url: Some("".to_string()),
+                    date_captured: Some(Utc::now()),
                 },
                 CocoImage {
                     id: 2,
                     width: 800,
                     height: 600,
                     file_name: "test2.jpg".to_string(),
-                    license: 0,
-                    flickr_url: "".to_string(),
-                    coco_url: "".to_string(),
-                    date_captured: Utc::now(),
+                    license: Some(0),
+                    flickr_url: Some("".to_string()),
+                    coco_url: Some("".to_string()),
+                    date_captured: Some(Utc::now()),
                 },
             ],
             annotations: vec![

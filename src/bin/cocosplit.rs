@@ -72,7 +72,7 @@ fn main() {
         })
         .collect();
 
-    let id_map = coco_file.make_id_map();
+    let id_map = coco_file.make_image_id_map();
     let mut id_map_entries: Vec<_> = id_map
         .par_iter()
         .progress_count(id_map.len() as u64)

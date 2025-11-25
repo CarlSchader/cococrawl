@@ -972,7 +972,7 @@ mod tests {
             categories: None,
         };
 
-        let id_map = coco_file.make_id_map();
+        let id_map = coco_file.make_image_id_map();
 
         assert_eq!(id_map.len(), 2);
 
@@ -1664,7 +1664,7 @@ mod tests {
             categories: None,
         };
 
-        let id_map = coco_file.make_id_map();
+        let id_map = coco_file.make_image_id_map();
 
         assert_eq!(id_map.len(), 2);
         assert_eq!(id_map.get(&1).unwrap().annotations.len(), 0);
@@ -1719,7 +1719,7 @@ mod tests {
             categories: None,
         };
 
-        let id_map = coco_file.make_id_map();
+        let id_map = coco_file.make_image_id_map();
         let entry = id_map.get(&1).unwrap();
 
         assert_eq!(entry.annotations.len(), 3);
@@ -1735,7 +1735,7 @@ mod tests {
             categories: None,
         };
 
-        let id_map = coco_file.make_id_map();
+        let id_map = coco_file.make_image_id_map();
         assert_eq!(id_map.len(), 0);
     }
 

@@ -416,13 +416,14 @@ pub struct CocoRLE {
 // Methods for CocoFile ///////////////////////////////////
 
 pub struct IDMapEntry<'a> {
+    /// image id
     pub id: i64,
     pub image: &'a CocoImage,
     pub annotations: Vec<&'a CocoAnnotation>,
 }
 
 impl CocoFile {
-    pub fn make_id_map(&self) -> std::collections::HashMap<i64, IDMapEntry<'_>> {
+    pub fn make_image_id_map(&self) -> std::collections::HashMap<i64, IDMapEntry<'_>> {
         let image_map: HashMap<i64, &CocoImage> = self
             .images
             .par_iter()

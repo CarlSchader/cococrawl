@@ -44,8 +44,8 @@ fn main() {
         .iter()
         .for_each(|category| match category {
             CocoCategory::ObjectDetection(_) => categories_count[0] += 1,
-            CocoCategory::PanopticSegmentation(_) => categories_count[0] += 1,
-            CocoCategory::KeypointDetection(_) => categories_count[0] += 1,
+            CocoCategory::PanopticSegmentation(_) => categories_count[1] += 1,
+            CocoCategory::KeypointDetection(_) => categories_count[2] += 1,
         });
 
     println!("Coco File: {}", coco_json_file_name);

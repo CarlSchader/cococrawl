@@ -1006,4 +1006,936 @@ mod tests {
         let coco_file: CocoFile = serde_json::from_str(json).unwrap();
         assert!(coco_file.categories.is_none());
     }
+
+    // ========== DENSEPOSE ANNOTATION TESTS ==========
+
+    #[test]
+    fn test_densepose_annotation_serde() {
+        let json = r#"{
+            "id": 1,
+            "image_id": 42,
+            "category_id": 1,
+            "iscrowd": 0,
+            "area": 1500,
+            "bbox": [100.0, 100.0, 50.0, 30.0],
+            "dp_I": [1.0, 2.0, 3.0],
+            "dp_U": [0.5, 0.6, 0.7],
+            "dp_V": [0.8, 0.9, 1.0],
+            "dp_x": [10.0, 20.0, 30.0],
+            "dp_y": [15.0, 25.0, 35.0],
+            "dp_masks": [
+                {
+                    "counts": [100, 50],
+                    "size": [640, 480]
+                }
+            ]
+        }"#;
+
+        let annotation: CocoAnnotation = serde_json::from_str(json).unwrap();
+        match annotation {
+            CocoAnnotation::DensePose(ann) => {
+                assert_eq!(ann.id, 1);
+                assert_eq!(ann.image_id, 42);
+                assert_eq!(ann.category_id, 1);
+                assert_eq!(ann.iscrowd, false);
+                assert_eq!(ann.area, 1500);
+                assert_eq!(ann.bbox, [100.0, 100.0, 50.0, 30.0]);
+                assert_eq!(ann.dp_i, vec![1.0, 2.0, 3.0]);
+                assert_eq!(ann.dp_u, vec![0.5, 0.6, 0.7]);
+                assert_eq!(ann.dp_v, vec![0.8, 0.9, 1.0]);
+                assert_eq!(ann.dp_x, vec![10.0, 20.0, 30.0]);
+                assert_eq!(ann.dp_y, vec![15.0, 25.0, 35.0]);
+                assert_eq!(ann.dp_masks.len(), 1);
+                assert_eq!(ann.dp_masks[0].counts, vec![100, 50]);
+            }
+            _ => panic!("Expected DensePose annotation"),
+        }
+    }
+
+    #[test]
+    fn test_densepose_annotation_roundtrip() {
+        let ann = CocoDensePoseAnnotation {
+            id: 123,
+            image_id: 456,
+            category_id: 7,
+            iscrowd: true,
+            area: 2000,
+            bbox: [10.0, 20.0, 30.0, 40.0],
+            dp_i: vec![1.0, 2.0],
+            dp_u: vec![0.1, 0.2],
+            dp_v: vec![0.3, 0.4],
+            dp_x: vec![5.0, 6.0],
+            dp_y: vec![7.0, 8.0],
+            dp_masks: vec![CocoRLE {
+                counts: vec![10, 20, 30],
+                size: (100, 200),
+            }],
+        };
+
+        let serialized = serde_json::to_string(&ann).unwrap();
+        let deserialized: CocoDensePoseAnnotation = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.id, 123);
+        assert_eq!(deserialized.image_id, 456);
+        assert_eq!(deserialized.category_id, 7);
+        assert_eq!(deserialized.iscrowd, true);
+        assert_eq!(deserialized.dp_i, vec![1.0, 2.0]);
+        assert_eq!(deserialized.dp_masks[0].counts, vec![10, 20, 30]);
+    }
+
+    #[test]
+    fn test_densepose_has_id() {
+        let mut ann = CocoDensePoseAnnotation {
+            id: 100,
+            image_id: 200,
+            category_id: 1,
+            iscrowd: false,
+            area: 500,
+            bbox: [0.0, 0.0, 10.0, 10.0],
+            dp_i: vec![],
+            dp_u: vec![],
+            dp_v: vec![],
+            dp_x: vec![],
+            dp_y: vec![],
+            dp_masks: vec![],
+        };
+
+        assert_eq!(ann.id(), 100);
+        ann.set_id(999);
+        assert_eq!(ann.id(), 999);
+    }
+
+    #[test]
+    fn test_densepose_has_category_id() {
+        let mut ann = CocoDensePoseAnnotation {
+            id: 1,
+            image_id: 2,
+            category_id: 5,
+            iscrowd: false,
+            area: 100,
+            bbox: [0.0, 0.0, 1.0, 1.0],
+            dp_i: vec![],
+            dp_u: vec![],
+            dp_v: vec![],
+            dp_x: vec![],
+            dp_y: vec![],
+            dp_masks: vec![],
+        };
+
+        assert_eq!(ann.category_id(), 5);
+        ann.set_category_id(10);
+        assert_eq!(ann.category_id(), 10);
+    }
+
+    #[test]
+    fn test_densepose_annotation_image_id() {
+        let mut ann = CocoAnnotation::DensePose(CocoDensePoseAnnotation {
+            id: 1,
+            image_id: 50,
+            category_id: 1,
+            iscrowd: false,
+            area: 100,
+            bbox: [0.0, 0.0, 1.0, 1.0],
+            dp_i: vec![],
+            dp_u: vec![],
+            dp_v: vec![],
+            dp_x: vec![],
+            dp_y: vec![],
+            dp_masks: vec![],
+        });
+
+        assert_eq!(ann.image_id(), 50);
+        ann.set_image_id(75);
+        assert_eq!(ann.image_id(), 75);
+    }
+
+    // ========== TRAIT SETTER TESTS ==========
+
+    #[test]
+    fn test_coco_image_set_id() {
+        let mut image = CocoImage {
+            id: 10,
+            width: 100,
+            height: 200,
+            file_name: "test.jpg".to_string(),
+            license: None,
+            flickr_url: None,
+            coco_url: None,
+            date_captured: None,
+        };
+
+        assert_eq!(image.id(), 10);
+        image.set_id(999);
+        assert_eq!(image.id(), 999);
+        assert_eq!(image.id, 999);
+    }
+
+    #[test]
+    fn test_coco_license_set_id() {
+        let mut license = CocoLicense {
+            id: 1,
+            name: "MIT".to_string(),
+            url: "http://mit.edu".to_string(),
+        };
+
+        assert_eq!(license.id(), 1);
+        license.set_id(50);
+        assert_eq!(license.id(), 50);
+        assert_eq!(license.id, 50);
+    }
+
+    #[test]
+    fn test_object_detection_annotation_setters() {
+        let mut ann = CocoObjectDetectionAnnotation {
+            id: 1,
+            image_id: 10,
+            category_id: 5,
+            segmentation: CocoSegmentation::Polygon(vec![vec![0.0, 0.0, 1.0, 1.0]]),
+            area: 100.0,
+            bbox: [0.0, 0.0, 10.0, 10.0],
+            iscrowd: false,
+        };
+
+        assert_eq!(ann.id(), 1);
+        ann.set_id(100);
+        assert_eq!(ann.id(), 100);
+
+        assert_eq!(ann.category_id(), 5);
+        ann.set_category_id(20);
+        assert_eq!(ann.category_id(), 20);
+    }
+
+    #[test]
+    fn test_keypoint_detection_annotation_setters() {
+        let mut ann = CocoKeypointDetectionAnnotation {
+            id: 2,
+            image_id: 20,
+            category_id: 3,
+            segmentation: CocoSegmentation::Polygon(vec![]),
+            area: 50.0,
+            bbox: [0.0, 0.0, 5.0, 5.0],
+            iscrowd: false,
+            keypoints: vec![1.0, 2.0, 3.0],
+            num_keypoints: 1,
+        };
+
+        assert_eq!(ann.id(), 2);
+        ann.set_id(200);
+        assert_eq!(ann.id(), 200);
+
+        assert_eq!(ann.category_id(), 3);
+        ann.set_category_id(30);
+        assert_eq!(ann.category_id(), 30);
+    }
+
+    #[test]
+    fn test_image_captioning_annotation_set_id() {
+        let mut ann = CocoImageCaptioningAnnotation {
+            id: 5,
+            image_id: 50,
+            caption: "Test caption".to_string(),
+        };
+
+        assert_eq!(ann.id(), 5);
+        ann.set_id(500);
+        assert_eq!(ann.id(), 500);
+    }
+
+    #[test]
+    fn test_panoptic_segment_info_set_id() {
+        let mut segment = CocoPanopticSegmentInfo {
+            id: 10,
+            category_id: 2,
+            area: 100,
+            bbox: [0.0, 0.0, 10.0, 10.0],
+            iscrowd: false,
+        };
+
+        assert_eq!(segment.id(), 10);
+        segment.set_id(1000);
+        assert_eq!(segment.id(), 1000);
+    }
+
+    #[test]
+    fn test_category_enum_set_id() {
+        let mut cat = CocoCategory::ObjectDetection(CocoObjectDetectionCategory {
+            id: 1,
+            name: "person".to_string(),
+            supercategory: "human".to_string(),
+        });
+
+        assert_eq!(cat.id(), 1);
+        cat.set_id(99);
+        assert_eq!(cat.id(), 99);
+    }
+
+    #[test]
+    fn test_object_detection_category_set_id() {
+        let mut cat = CocoObjectDetectionCategory {
+            id: 1,
+            name: "car".to_string(),
+            supercategory: "vehicle".to_string(),
+        };
+
+        assert_eq!(cat.id(), 1);
+        cat.set_id(42);
+        assert_eq!(cat.id(), 42);
+    }
+
+    #[test]
+    fn test_keypoint_detection_category_set_id() {
+        let mut cat = CocoKeypointDetectionCategory {
+            id: 2,
+            name: "person".to_string(),
+            supercategory: "human".to_string(),
+            keypoints: vec!["nose".to_string()],
+            skeleton: vec![[0, 1]],
+        };
+
+        assert_eq!(cat.id(), 2);
+        cat.set_id(43);
+        assert_eq!(cat.id(), 43);
+    }
+
+    #[test]
+    fn test_panoptic_segmentation_category_set_id() {
+        let mut cat = CocoPanopticSegmentationCategory {
+            id: 3,
+            name: "sky".to_string(),
+            supercategory: "background".to_string(),
+            isthing: false,
+            color: [135, 206, 235],
+        };
+
+        assert_eq!(cat.id(), 3);
+        cat.set_id(44);
+        assert_eq!(cat.id(), 44);
+    }
+
+    // ========== SET_IMAGE_ID TESTS ==========
+
+    #[test]
+    fn test_annotation_set_image_id_all_types() {
+        let mut obj_det = CocoAnnotation::ObjectDetection(CocoObjectDetectionAnnotation {
+            id: 1,
+            image_id: 10,
+            category_id: 1,
+            segmentation: CocoSegmentation::Polygon(vec![]),
+            area: 1.0,
+            bbox: [0.0, 0.0, 1.0, 1.0],
+            iscrowd: false,
+        });
+        obj_det.set_image_id(100);
+        assert_eq!(obj_det.image_id(), 100);
+
+        let mut kp_det = CocoAnnotation::KeypointDetection(CocoKeypointDetectionAnnotation {
+            id: 2,
+            image_id: 20,
+            category_id: 1,
+            segmentation: CocoSegmentation::Polygon(vec![]),
+            area: 1.0,
+            bbox: [0.0, 0.0, 1.0, 1.0],
+            iscrowd: false,
+            keypoints: vec![],
+            num_keypoints: 0,
+        });
+        kp_det.set_image_id(200);
+        assert_eq!(kp_det.image_id(), 200);
+
+        let mut panoptic = CocoAnnotation::PanopticSegmentation(
+            CocoPanopticSegmentationAnnotation {
+                image_id: 30,
+                file_name: "test.png".to_string(),
+                segments_info: vec![],
+            },
+        );
+        panoptic.set_image_id(300);
+        assert_eq!(panoptic.image_id(), 300);
+
+        let mut caption = CocoAnnotation::ImageCaptioning(CocoImageCaptioningAnnotation {
+            id: 4,
+            image_id: 40,
+            caption: "test".to_string(),
+        });
+        caption.set_image_id(400);
+        assert_eq!(caption.image_id(), 400);
+
+        let mut densepose = CocoAnnotation::DensePose(CocoDensePoseAnnotation {
+            id: 5,
+            image_id: 50,
+            category_id: 1,
+            iscrowd: false,
+            area: 100,
+            bbox: [0.0, 0.0, 1.0, 1.0],
+            dp_i: vec![],
+            dp_u: vec![],
+            dp_v: vec![],
+            dp_x: vec![],
+            dp_y: vec![],
+            dp_masks: vec![],
+        });
+        densepose.set_image_id(500);
+        assert_eq!(densepose.image_id(), 500);
+    }
+
+    // ========== PARTIAL EQ TESTS ==========
+
+    #[test]
+    fn test_coco_license_equality() {
+        let license1 = CocoLicense {
+            id: 1,
+            name: "MIT".to_string(),
+            url: "http://mit.edu".to_string(),
+        };
+        let license2 = CocoLicense {
+            id: 999, // Different ID
+            name: "MIT".to_string(),
+            url: "http://mit.edu".to_string(),
+        };
+        let license3 = CocoLicense {
+            id: 1,
+            name: "Apache".to_string(),
+            url: "http://apache.org".to_string(),
+        };
+
+        // Same name and URL, different ID -> should be equal
+        assert!(license1 == license2);
+        // Different name -> should not be equal
+        assert!(license1 != license3);
+    }
+
+    #[test]
+    fn test_object_detection_category_equality() {
+        let cat1 = CocoObjectDetectionCategory {
+            id: 1,
+            name: "person".to_string(),
+            supercategory: "human".to_string(),
+        };
+        let cat2 = CocoObjectDetectionCategory {
+            id: 999, // Different ID
+            name: "person".to_string(),
+            supercategory: "human".to_string(),
+        };
+        let cat3 = CocoObjectDetectionCategory {
+            id: 1,
+            name: "car".to_string(),
+            supercategory: "vehicle".to_string(),
+        };
+
+        assert!(cat1 == cat2);
+        assert!(cat1 != cat3);
+    }
+
+    #[test]
+    fn test_keypoint_detection_category_equality() {
+        let cat1 = CocoKeypointDetectionCategory {
+            id: 1,
+            name: "person".to_string(),
+            supercategory: "human".to_string(),
+            keypoints: vec!["nose".to_string(), "eye".to_string()],
+            skeleton: vec![[0, 1], [1, 2]],
+        };
+        let cat2 = CocoKeypointDetectionCategory {
+            id: 999,
+            name: "person".to_string(),
+            supercategory: "human".to_string(),
+            keypoints: vec!["nose".to_string(), "eye".to_string()],
+            skeleton: vec![[0, 1], [1, 2]],
+        };
+        let cat3 = CocoKeypointDetectionCategory {
+            id: 1,
+            name: "person".to_string(),
+            supercategory: "human".to_string(),
+            keypoints: vec!["nose".to_string()], // Different keypoints
+            skeleton: vec![[0, 1], [1, 2]],
+        };
+
+        assert!(cat1 == cat2);
+        assert!(cat1 != cat3);
+    }
+
+    #[test]
+    fn test_panoptic_segmentation_category_equality() {
+        let cat1 = CocoPanopticSegmentationCategory {
+            id: 1,
+            name: "sky".to_string(),
+            supercategory: "background".to_string(),
+            isthing: false,
+            color: [135, 206, 235],
+        };
+        let cat2 = CocoPanopticSegmentationCategory {
+            id: 999,
+            name: "sky".to_string(),
+            supercategory: "background".to_string(),
+            isthing: false,
+            color: [135, 206, 235],
+        };
+        let cat3 = CocoPanopticSegmentationCategory {
+            id: 1,
+            name: "sky".to_string(),
+            supercategory: "background".to_string(),
+            isthing: true, // Different isthing
+            color: [135, 206, 235],
+        };
+
+        assert!(cat1 == cat2);
+        assert!(cat1 != cat3);
+    }
+
+    // ========== OPTIONAL FIELD SERIALIZATION TESTS ==========
+
+    #[test]
+    fn test_coco_file_optional_fields_none() {
+        let coco_file = CocoFile {
+            info: None,
+            licenses: None,
+            images: vec![],
+            annotations: vec![],
+            categories: None,
+        };
+
+        let serialized = serde_json::to_string(&coco_file).unwrap();
+        assert!(!serialized.contains("\"info\""));
+        assert!(!serialized.contains("\"licenses\""));
+        assert!(!serialized.contains("\"categories\""));
+    }
+
+    #[test]
+    fn test_coco_image_optional_fields_none() {
+        let image = CocoImage {
+            id: 1,
+            width: 100,
+            height: 200,
+            file_name: "test.jpg".to_string(),
+            license: None,
+            flickr_url: None,
+            coco_url: None,
+            date_captured: None,
+        };
+
+        let serialized = serde_json::to_string(&image).unwrap();
+        assert!(!serialized.contains("\"license\""));
+        assert!(!serialized.contains("\"flickr_url\""));
+        assert!(!serialized.contains("\"coco_url\""));
+        assert!(!serialized.contains("\"date_captured\""));
+    }
+
+    #[test]
+    fn test_coco_image_optional_fields_present() {
+        let image = CocoImage {
+            id: 1,
+            width: 100,
+            height: 200,
+            file_name: "test.jpg".to_string(),
+            license: Some(1),
+            flickr_url: Some("http://flickr.com".to_string()),
+            coco_url: Some("http://coco.com".to_string()),
+            date_captured: Some(Utc::now()),
+        };
+
+        let serialized = serde_json::to_string(&image).unwrap();
+        assert!(serialized.contains("\"license\""));
+        assert!(serialized.contains("\"flickr_url\""));
+        assert!(serialized.contains("\"coco_url\""));
+        assert!(serialized.contains("\"date_captured\""));
+    }
+
+    // ========== ROUNDTRIP TESTS ==========
+
+    #[test]
+    fn test_coco_file_roundtrip() {
+        let original = CocoFile {
+            info: Some(CocoInfo {
+                year: 2020,
+                version: "1.0".to_string(),
+                description: "Test".to_string(),
+                contributor: "Tester".to_string(),
+                url: "http://test.com".to_string(),
+                date_created: Utc::now(),
+            }),
+            licenses: Some(vec![CocoLicense {
+                id: 1,
+                name: "MIT".to_string(),
+                url: "http://mit.edu".to_string(),
+            }]),
+            images: vec![CocoImage {
+                id: 1,
+                width: 640,
+                height: 480,
+                file_name: "test.jpg".to_string(),
+                license: Some(1),
+                flickr_url: None,
+                coco_url: None,
+                date_captured: None,
+            }],
+            annotations: vec![],
+            categories: Some(vec![CocoCategory::ObjectDetection(
+                CocoObjectDetectionCategory {
+                    id: 1,
+                    name: "person".to_string(),
+                    supercategory: "human".to_string(),
+                },
+            )]),
+        };
+
+        let serialized = serde_json::to_string(&original).unwrap();
+        let deserialized: CocoFile = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.images.len(), 1);
+        assert_eq!(deserialized.images[0].id, 1);
+        assert_eq!(deserialized.licenses.as_ref().unwrap().len(), 1);
+        assert_eq!(deserialized.categories.as_ref().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_object_detection_annotation_roundtrip() {
+        let original = CocoObjectDetectionAnnotation {
+            id: 1,
+            image_id: 10,
+            category_id: 5,
+            segmentation: CocoSegmentation::Polygon(vec![vec![0.0, 0.0, 10.0, 0.0, 10.0, 10.0]]),
+            area: 50.0,
+            bbox: [0.0, 0.0, 10.0, 10.0],
+            iscrowd: true,
+        };
+
+        let serialized = serde_json::to_string(&original).unwrap();
+        let deserialized: CocoObjectDetectionAnnotation =
+            serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.id, 1);
+        assert_eq!(deserialized.image_id, 10);
+        assert_eq!(deserialized.category_id, 5);
+        assert_eq!(deserialized.iscrowd, true);
+    }
+
+    #[test]
+    fn test_keypoint_detection_annotation_roundtrip() {
+        let original = CocoKeypointDetectionAnnotation {
+            id: 2,
+            image_id: 20,
+            category_id: 3,
+            segmentation: CocoSegmentation::Polygon(vec![]),
+            area: 100.0,
+            bbox: [5.0, 5.0, 15.0, 15.0],
+            iscrowd: false,
+            keypoints: vec![10.0, 10.0, 2.0, 15.0, 15.0, 2.0],
+            num_keypoints: 2,
+        };
+
+        let serialized = serde_json::to_string(&original).unwrap();
+        let deserialized: CocoKeypointDetectionAnnotation =
+            serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.num_keypoints, 2);
+        assert_eq!(deserialized.keypoints.len(), 6);
+    }
+
+    // ========== MAKE_ID_MAP EDGE CASE TESTS ==========
+
+    #[test]
+    fn test_make_id_map_with_no_annotations() {
+        let coco_file = CocoFile {
+            info: None,
+            licenses: None,
+            images: vec![
+                CocoImage {
+                    id: 1,
+                    width: 100,
+                    height: 100,
+                    file_name: "img1.jpg".to_string(),
+                    license: None,
+                    flickr_url: None,
+                    coco_url: None,
+                    date_captured: None,
+                },
+                CocoImage {
+                    id: 2,
+                    width: 200,
+                    height: 200,
+                    file_name: "img2.jpg".to_string(),
+                    license: None,
+                    flickr_url: None,
+                    coco_url: None,
+                    date_captured: None,
+                },
+            ],
+            annotations: vec![],
+            categories: None,
+        };
+
+        let id_map = coco_file.make_id_map();
+
+        assert_eq!(id_map.len(), 2);
+        assert_eq!(id_map.get(&1).unwrap().annotations.len(), 0);
+        assert_eq!(id_map.get(&2).unwrap().annotations.len(), 0);
+    }
+
+    #[test]
+    fn test_make_id_map_with_mixed_annotation_types() {
+        let coco_file = CocoFile {
+            info: None,
+            licenses: None,
+            images: vec![CocoImage {
+                id: 1,
+                width: 100,
+                height: 100,
+                file_name: "img1.jpg".to_string(),
+                license: None,
+                flickr_url: None,
+                coco_url: None,
+                date_captured: None,
+            }],
+            annotations: vec![
+                CocoAnnotation::ObjectDetection(CocoObjectDetectionAnnotation {
+                    id: 1,
+                    image_id: 1,
+                    category_id: 1,
+                    segmentation: CocoSegmentation::Polygon(vec![]),
+                    area: 1.0,
+                    bbox: [0.0, 0.0, 1.0, 1.0],
+                    iscrowd: false,
+                }),
+                CocoAnnotation::ImageCaptioning(CocoImageCaptioningAnnotation {
+                    id: 2,
+                    image_id: 1,
+                    caption: "test".to_string(),
+                }),
+                CocoAnnotation::DensePose(CocoDensePoseAnnotation {
+                    id: 3,
+                    image_id: 1,
+                    category_id: 1,
+                    iscrowd: false,
+                    area: 100,
+                    bbox: [0.0, 0.0, 10.0, 10.0],
+                    dp_i: vec![],
+                    dp_u: vec![],
+                    dp_v: vec![],
+                    dp_x: vec![],
+                    dp_y: vec![],
+                    dp_masks: vec![],
+                }),
+            ],
+            categories: None,
+        };
+
+        let id_map = coco_file.make_id_map();
+        let entry = id_map.get(&1).unwrap();
+
+        assert_eq!(entry.annotations.len(), 3);
+    }
+
+    #[test]
+    fn test_make_id_map_empty_dataset() {
+        let coco_file = CocoFile {
+            info: None,
+            licenses: None,
+            images: vec![],
+            annotations: vec![],
+            categories: None,
+        };
+
+        let id_map = coco_file.make_id_map();
+        assert_eq!(id_map.len(), 0);
+    }
+
+    // ========== EDGE CASE TESTS ==========
+
+    #[test]
+    fn test_empty_polygon_segmentation() {
+        let json = r#"[]"#;
+        let segmentation: CocoSegmentation = serde_json::from_str(json).unwrap();
+
+        match segmentation {
+            CocoSegmentation::Polygon(polygons) => {
+                assert_eq!(polygons.len(), 0);
+            }
+            _ => panic!("Expected empty Polygon segmentation"),
+        }
+    }
+
+    #[test]
+    fn test_multiple_polygons_segmentation() {
+        let json = r#"[[10.0, 10.0, 20.0, 10.0], [30.0, 30.0, 40.0, 40.0]]"#;
+        let segmentation: CocoSegmentation = serde_json::from_str(json).unwrap();
+
+        match segmentation {
+            CocoSegmentation::Polygon(polygons) => {
+                assert_eq!(polygons.len(), 2);
+                assert_eq!(polygons[0].len(), 4);
+                assert_eq!(polygons[1].len(), 4);
+            }
+            _ => panic!("Expected Polygon segmentation with 2 polygons"),
+        }
+    }
+
+    #[test]
+    fn test_empty_rle_counts() {
+        let rle = CocoRLE {
+            counts: vec![],
+            size: (100, 100),
+        };
+
+        let serialized = serde_json::to_string(&rle).unwrap();
+        let deserialized: CocoRLE = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.counts.len(), 0);
+        assert_eq!(deserialized.size, (100, 100));
+    }
+
+    #[test]
+    fn test_large_image_dimensions() {
+        let image = CocoImage {
+            id: 1,
+            width: 10000,
+            height: 8000,
+            file_name: "huge.jpg".to_string(),
+            license: None,
+            flickr_url: None,
+            coco_url: None,
+            date_captured: None,
+        };
+
+        let serialized = serde_json::to_string(&image).unwrap();
+        let deserialized: CocoImage = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.width, 10000);
+        assert_eq!(deserialized.height, 8000);
+    }
+
+    #[test]
+    fn test_bbox_with_zeros() {
+        let ann = CocoObjectDetectionAnnotation {
+            id: 1,
+            image_id: 1,
+            category_id: 1,
+            segmentation: CocoSegmentation::Polygon(vec![]),
+            area: 0.0,
+            bbox: [0.0, 0.0, 0.0, 0.0],
+            iscrowd: false,
+        };
+
+        let serialized = serde_json::to_string(&ann).unwrap();
+        let deserialized: CocoObjectDetectionAnnotation =
+            serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.bbox, [0.0, 0.0, 0.0, 0.0]);
+        assert_eq!(deserialized.area, 0.0);
+    }
+
+    #[test]
+    fn test_negative_bbox_values() {
+        let ann = CocoObjectDetectionAnnotation {
+            id: 1,
+            image_id: 1,
+            category_id: 1,
+            segmentation: CocoSegmentation::Polygon(vec![]),
+            area: 100.0,
+            bbox: [-10.0, -20.0, 30.0, 40.0],
+            iscrowd: false,
+        };
+
+        let serialized = serde_json::to_string(&ann).unwrap();
+        let deserialized: CocoObjectDetectionAnnotation =
+            serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.bbox[0], -10.0);
+        assert_eq!(deserialized.bbox[1], -20.0);
+    }
+
+    #[test]
+    fn test_empty_keypoints() {
+        let ann = CocoKeypointDetectionAnnotation {
+            id: 1,
+            image_id: 1,
+            category_id: 1,
+            segmentation: CocoSegmentation::Polygon(vec![]),
+            area: 1.0,
+            bbox: [0.0, 0.0, 1.0, 1.0],
+            iscrowd: false,
+            keypoints: vec![],
+            num_keypoints: 0,
+        };
+
+        let serialized = serde_json::to_string(&ann).unwrap();
+        let deserialized: CocoKeypointDetectionAnnotation =
+            serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.keypoints.len(), 0);
+        assert_eq!(deserialized.num_keypoints, 0);
+    }
+
+    #[test]
+    fn test_empty_category_strings() {
+        let cat = CocoObjectDetectionCategory {
+            id: 1,
+            name: "".to_string(),
+            supercategory: "".to_string(),
+        };
+
+        let serialized = serde_json::to_string(&cat).unwrap();
+        let deserialized: CocoObjectDetectionCategory =
+            serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.name, "");
+        assert_eq!(deserialized.supercategory, "");
+    }
+
+    #[test]
+    fn test_empty_caption() {
+        let ann = CocoImageCaptioningAnnotation {
+            id: 1,
+            image_id: 1,
+            caption: "".to_string(),
+        };
+
+        let serialized = serde_json::to_string(&ann).unwrap();
+        let deserialized: CocoImageCaptioningAnnotation =
+            serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.caption, "");
+    }
+
+    #[test]
+    fn test_panoptic_segmentation_empty_segments_info() {
+        let ann = CocoPanopticSegmentationAnnotation {
+            image_id: 1,
+            file_name: "seg_1.png".to_string(),
+            segments_info: vec![],
+        };
+
+        let serialized = serde_json::to_string(&ann).unwrap();
+        let deserialized: CocoPanopticSegmentationAnnotation =
+            serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized.segments_info.len(), 0);
+    }
+
+    #[test]
+    fn test_category_enum_all_variants_id_methods() {
+        let obj_det = CocoCategory::ObjectDetection(CocoObjectDetectionCategory {
+            id: 1,
+            name: "test".to_string(),
+            supercategory: "test".to_string(),
+        });
+        assert_eq!(obj_det.id(), 1);
+
+        let kp_det = CocoCategory::KeypointDetection(CocoKeypointDetectionCategory {
+            id: 2,
+            name: "test".to_string(),
+            supercategory: "test".to_string(),
+            keypoints: vec![],
+            skeleton: vec![],
+        });
+        assert_eq!(kp_det.id(), 2);
+
+        let panoptic = CocoCategory::PanopticSegmentation(CocoPanopticSegmentationCategory {
+            id: 3,
+            name: "test".to_string(),
+            supercategory: "test".to_string(),
+            isthing: true,
+            color: [0, 0, 0],
+        });
+        assert_eq!(panoptic.id(), 3);
+    }
 }

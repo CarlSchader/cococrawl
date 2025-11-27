@@ -43,7 +43,7 @@ fn main() -> Result<()> {
 
     let extension_set: HashSet<&str> = IMAGE_EXTENSIONS.iter().cloned().collect();
 
-    let found_files: Vec<PathBuf> = args
+    let entries: Vec<_> =  args
         .directories
         .iter()
         .flat_map(|dir| {
@@ -60,22 +60,19 @@ fn main() -> Result<()> {
                             extension_set.contains(&ext_str.to_lowercase().as_str())
                         })
                 })
-                .map(|entry| {
-                    create_coco_image_path(args.output.as_path(), entry.path(), args.absolute_paths).expect("Could not create COCO image path")
-                })
-        })
-        .collect();
+        }).collect();
 
-    let images: Vec<CocoImage> = found_files
+    let images: Vec<CocoImage> = entries
         .par_iter()
-        .progress()
+        .progress_count(entries.len() as u64)
         .enumerate()
-        .map(|(id, file_path)| {
-            let metadata = fs::metadata(file_path).unwrap();
+        .map(|(id, entry)| {
+            let written_path = create_coco_image_path(args.output.as_path(), entry.path(), args.absolute_paths).expect("Could not create COCO image path");
+            let metadata = fs::metadata(entry.path()).unwrap();
             let date_created = metadata.created().ok();
             let date_created = date_created.map(|dt| DateTime::<Utc>::from(dt));
 
-            let (width, height) = ImageReader::open(file_path)
+            let (width, height) = ImageReader::open(&entry.path())
                 .unwrap()
                 .with_guessed_format()
                 .unwrap()
@@ -86,7 +83,7 @@ fn main() -> Result<()> {
                 id: id as i64,
                 width,
                 height,
-                file_name: file_path.to_string_lossy().to_string(),
+                file_name: written_path.to_string_lossy().to_string(),
                 license: None,
                 flickr_url: None,
                 coco_url: None,

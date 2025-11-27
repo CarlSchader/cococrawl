@@ -17,11 +17,13 @@ pub fn create_coco_image_path(
         return Ok(image_file_path.canonicalize()?)
     }
 
-    let dataset_file_parent = dataset_file_path.parent().expect(format!("unable to get parent dir for {}", dataset_file_path.to_string_lossy()).as_str());
+    let absolute_dataset_file_path = dataset_file_path.canonicalize()?;
+    let dataset_file_parent = absolute_dataset_file_path.parent().expect(format!("unable to get parent dir for {}", dataset_file_path.to_string_lossy()).as_str());
 
     if is_in_directory_tree(image_file_path, dataset_file_parent)? {
         Ok(
             image_file_path
+            .canonicalize()?
             .strip_prefix(dataset_file_parent)?
             .to_path_buf()
         )

@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 pub mod path_utils;
 
@@ -36,7 +36,7 @@ pub struct CocoImage {
     pub id: i64,
     pub width: u32,
     pub height: u32,
-    pub file_name: String,
+    pub file_name: PathBuf,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub license: Option<i32>,

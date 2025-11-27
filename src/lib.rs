@@ -4,6 +4,8 @@ use rayon::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 
+pub mod path_utils;
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CocoFile {
     pub images: Vec<CocoImage>,

@@ -1,16 +1,17 @@
 use chrono::{DateTime, Datelike, Utc};
 use clap::Parser;
 use image::ImageReader;
+use anyhow::Result;
 use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
 use serde_json;
 use std::collections::HashSet;
 use std::fs;
-use std::fs::{File, canonicalize};
+use std::fs::File;
 use std::io::BufWriter;
 use std::path::PathBuf;
 
-use cococrawl::{CocoFile, CocoImage, CocoInfo};
+use cococrawl::{CocoFile, CocoImage, CocoInfo, path_utils::create_coco_image_path};
 
 const IMAGE_EXTENSIONS: [&str; 8] = ["png", "jpg", "jpeg", "gif", "bmp", "tiff", "svg", "webp"];
 
@@ -23,18 +24,19 @@ struct Args {
 
     /// JSON output path
     #[clap(short, long, default_value = "coco.json")]
-    output: String,
+    output: PathBuf,
 
     /// Version string for the COCO info section
     #[clap(short, long, default_value = "1.0.0")]
     version_string: String,
 
-    /// Use absolute paths for image file names. By default, relative paths are used.
+    /// Force absolute paths for image file names. By default, relative paths are used if and image
+    /// is located within the same directory tree as the output JSON file. Otherwise, absolute paths are used.
     #[clap(short, long)]
     absolute_paths: bool,
 }
 
-fn main() {
+fn main() -> Result<()> {
     let args = Args::parse();
 
     let output_file = File::create(&args.output).expect("Could not create output file");
@@ -59,11 +61,7 @@ fn main() {
                         })
                 })
                 .map(|entry| {
-                    if args.absolute_paths {
-                        canonicalize(entry.path()).unwrap_or(entry.path().to_path_buf())
-                    } else {
-                        entry.path().to_path_buf()
-                    }
+                    create_coco_image_path(args.output.as_path(), entry.path(), args.absolute_paths).expect("Could not create COCO image path")
                 })
         })
         .collect();
@@ -117,4 +115,6 @@ fn main() {
     let writer = BufWriter::new(output_file);
 
     serde_json::to_writer_pretty(writer, &coco_file).expect("Could not write JSON to output file");
+
+    Ok(())
 }

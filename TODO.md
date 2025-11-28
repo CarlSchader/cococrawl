@@ -1,2 +1,2 @@
-- [ ] Intelligent image paths based on where the output file is set relative to input file/files. Basically whenever we create new files the `image.file_name` should be relative or absolute depending on where the image actually is. 
+- [x] Intelligent image paths based on where the output file is set relative to input file/files. Basically whenever we create new files the `image.file_name` should be relative or absolute depending on where the image actually is. 
 - [ ] stdin/stdout support. This will be nice because piping these files into eachother will help with perforance in data pipelines so we don't have to hit disk until absolutely necessary.

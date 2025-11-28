@@ -30,7 +30,7 @@ struct Args {
     #[clap(short, long, default_value = "1.0.0")]
     version_string: String,
 
-    /// Force absolute paths for image file names. By default, relative paths are used if and image
+    /// Force absolute paths for image file names. By default, relative paths are used if the image
     /// is located within the same directory tree as the output JSON file. Otherwise, absolute paths are used.
     #[clap(short, long)]
     absolute_paths: bool,
@@ -83,7 +83,7 @@ fn main() -> Result<()> {
                 id: id as i64,
                 width,
                 height,
-                file_name: written_path.to_string_lossy().to_string(),
+                file_name: written_path,
                 license: None,
                 flickr_url: None,
                 coco_url: None,

@@ -1,8 +1,9 @@
 use chrono::{DateTime, Utc};
+use anyhow::Result;
 use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::HashMap;
+use std::{collections::HashMap, path::{Path, PathBuf}};
 
 pub mod path_utils;
 
@@ -36,7 +37,7 @@ pub struct CocoImage {
     pub id: i64,
     pub width: u32,
     pub height: u32,
-    pub file_name: String,
+    pub file_name: PathBuf,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub license: Option<i32>,
@@ -49,6 +50,19 @@ pub struct CocoImage {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date_captured: Option<DateTime<Utc>>,
+}
+
+impl CocoImage {
+    pub fn get_absolute_path(&self, dataset_file_path: &Path) -> Result<PathBuf> {
+        if self.file_name.is_absolute() {
+            Ok(self.file_name.clone())
+        } else {
+            Ok(dataset_file_path
+                .parent()
+                .expect(format!("unable to get parent dir for {}", dataset_file_path.to_string_lossy()).as_str())
+                .join(&self.file_name))
+        }
+    }
 }
 
 impl HasID<i64> for CocoImage {
@@ -191,7 +205,7 @@ impl HasCategoryID for CocoKeypointDetectionAnnotation {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CocoPanopticSegmentationAnnotation {
     pub image_id: i64,
-    pub file_name: String,
+    pub file_name: PathBuf,
     pub segments_info: Vec<CocoPanopticSegmentInfo>,
 }
 
@@ -563,7 +577,7 @@ mod tests {
         assert_eq!(image.id, 42);
         assert_eq!(image.width, 640);
         assert_eq!(image.height, 480);
-        assert_eq!(image.file_name, "test.jpg");
+        assert_eq!(image.file_name, PathBuf::from("test.jpg"));
         assert_eq!(image.license, Some(1));
     }
 
@@ -704,7 +718,7 @@ mod tests {
         match annotation {
             CocoAnnotation::PanopticSegmentation(ann) => {
                 assert_eq!(ann.image_id, 42);
-                assert_eq!(ann.file_name, "segmentation_42.png");
+                assert_eq!(ann.file_name, PathBuf::from("segmentation_42.png"));
                 assert_eq!(ann.segments_info.len(), 1);
                 assert_eq!(ann.segments_info[0].id, 1);
             }
@@ -937,7 +951,7 @@ mod tests {
                     id: 1,
                     width: 640,
                     height: 480,
-                    file_name: "test1.jpg".to_string(),
+                    file_name: PathBuf::from("test1.jpg"),
                     license: Some(0),
                     flickr_url: Some("".to_string()),
                     coco_url: Some("".to_string()),
@@ -947,7 +961,7 @@ mod tests {
                     id: 2,
                     width: 800,
                     height: 600,
-                    file_name: "test2.jpg".to_string(),
+                    file_name: PathBuf::from("test2.jpg"),
                     license: Some(0),
                     flickr_url: Some("".to_string()),
                     coco_url: Some("".to_string()),
@@ -980,12 +994,12 @@ mod tests {
 
         let entry1 = id_map.get(&1).unwrap();
         assert_eq!(entry1.id, 1);
-        assert_eq!(entry1.image.file_name, "test1.jpg");
+        assert_eq!(entry1.image.file_name, PathBuf::from("test1.jpg"));
         assert_eq!(entry1.annotations.len(), 2);
 
         let entry2 = id_map.get(&2).unwrap();
         assert_eq!(entry2.id, 2);
-        assert_eq!(entry2.image.file_name, "test2.jpg");
+        assert_eq!(entry2.image.file_name, PathBuf::from("test2.jpg"));
         assert_eq!(entry2.annotations.len(), 1);
     }
 
@@ -1159,7 +1173,7 @@ mod tests {
             id: 10,
             width: 100,
             height: 200,
-            file_name: "test.jpg".to_string(),
+            file_name: PathBuf::from("test.jpg"),
             license: None,
             flickr_url: None,
             coco_url: None,
@@ -1347,7 +1361,7 @@ mod tests {
         let mut panoptic = CocoAnnotation::PanopticSegmentation(
             CocoPanopticSegmentationAnnotation {
                 image_id: 30,
-                file_name: "test.png".to_string(),
+                file_name: PathBuf::from("test.png"),
                 segments_info: vec![],
             },
         );
@@ -1508,7 +1522,7 @@ mod tests {
             id: 1,
             width: 100,
             height: 200,
-            file_name: "test.jpg".to_string(),
+            file_name: PathBuf::from("test.jpg"),
             license: None,
             flickr_url: None,
             coco_url: None,
@@ -1528,7 +1542,7 @@ mod tests {
             id: 1,
             width: 100,
             height: 200,
-            file_name: "test.jpg".to_string(),
+            file_name: PathBuf::from("test.jpg"),
             license: Some(1),
             flickr_url: Some("http://flickr.com".to_string()),
             coco_url: Some("http://coco.com".to_string()),
@@ -1564,7 +1578,7 @@ mod tests {
                 id: 1,
                 width: 640,
                 height: 480,
-                file_name: "test.jpg".to_string(),
+                file_name: PathBuf::from("test.jpg"),
                 license: Some(1),
                 flickr_url: None,
                 coco_url: None,
@@ -1645,7 +1659,7 @@ mod tests {
                     id: 1,
                     width: 100,
                     height: 100,
-                    file_name: "img1.jpg".to_string(),
+                    file_name: PathBuf::from("img1.jpg"),
                     license: None,
                     flickr_url: None,
                     coco_url: None,
@@ -1655,7 +1669,7 @@ mod tests {
                     id: 2,
                     width: 200,
                     height: 200,
-                    file_name: "img2.jpg".to_string(),
+                    file_name: PathBuf::from("img2.jpg"),
                     license: None,
                     flickr_url: None,
                     coco_url: None,
@@ -1682,7 +1696,7 @@ mod tests {
                 id: 1,
                 width: 100,
                 height: 100,
-                file_name: "img1.jpg".to_string(),
+                file_name: PathBuf::from("img1.jpg"),
                 license: None,
                 flickr_url: None,
                 coco_url: None,
@@ -1791,7 +1805,7 @@ mod tests {
             id: 1,
             width: 10000,
             height: 8000,
-            file_name: "huge.jpg".to_string(),
+            file_name: PathBuf::from("huge.jpg"),
             license: None,
             flickr_url: None,
             coco_url: None,
@@ -1902,7 +1916,7 @@ mod tests {
     fn test_panoptic_segmentation_empty_segments_info() {
         let ann = CocoPanopticSegmentationAnnotation {
             image_id: 1,
-            file_name: "seg_1.png".to_string(),
+            file_name: PathBuf::from("seg_1.png"),
             segments_info: vec![],
         };
 

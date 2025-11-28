@@ -1,5 +1,6 @@
 use chrono::{Datelike, Utc};
 use clap::Parser;
+use cococrawl::path_utils::create_coco_image_path;
 use cococrawl::{
     CocoAnnotation, CocoCategory, CocoFile, CocoImage, CocoInfo, CocoLicense, HasCategoryID, HasID,
 };
@@ -32,6 +33,10 @@ struct Args {
     /// Version string for the COCO info section
     #[clap(short, long, default_value = "1.0.0")]
     version_string: String,
+
+    /// Force absolute paths for image file names in the merged output file.
+    #[clap(short, long)]
+    absolute_paths: bool,
 }
 
 fn main() {
@@ -45,6 +50,10 @@ fn main() {
             serde_json::from_str(&coco_json).expect("Could not parse COCO JSON")
         })
         .collect();
+
+
+    // create output file now so canonicalize doesn't fail later
+    let output_file = File::create(&args.output_path).expect("Could not create output COCO JSON file");
 
     // Categories don't hash on id but instead they hash on the everything else in the struct.
     // This allows us to use this as a ground truth for making sure all categories have the same id
@@ -127,14 +136,21 @@ fn main() {
             let mut new_image = image.clone();
 
             // hanlde image path
-            new_image.file_name = if PathBuf::from(&image.file_name).is_absolute() {
-                PathBuf::from(&image.file_name)
-            } else {
-                coco_file_path
-                    .parent()
-                    .unwrap()
-                    .join(&image.file_name)
-            }.to_string_lossy().to_string();
+            new_image.file_name = create_coco_image_path(
+                &args.output_path.as_path(), 
+                new_image.get_absolute_path(&coco_file_path.as_path())
+                    .expect(format!(
+                        "Could not get absolute image path for image id {} in file {}",
+                        new_image.id(),
+                        coco_file_path.to_string_lossy(),
+                    ).as_str())
+                    .as_path(),
+                args.absolute_paths,
+            ).expect(format!(
+                "Could not create COCO image path for image id {} in file {}",
+                new_image.id(),
+                coco_file_path.to_string_lossy(),
+            ).as_str());
 
             // handle license
             if let Some(new_license_id) = new_image.license {
@@ -308,8 +324,6 @@ fn main() {
         categories: Some(category_set.into_iter().collect()),
     };
 
-    let merged_path = PathBuf::from(&args.output_path);
-    let output_file = File::create(&merged_path).expect("Could not create output COCO JSON file");
     let writer = BufWriter::new(output_file);
     serde_json::to_writer_pretty(writer, &merged_file)
         .expect("Could not write COCO JSON to output file");

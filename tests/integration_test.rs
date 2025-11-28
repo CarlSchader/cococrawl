@@ -12,7 +12,17 @@ fn get_binary_path(name: &str) -> PathBuf {
     path
 }
 
+fn create_dummy_image(path: &PathBuf, width: u32, height: u32) {
+    use image::{ImageBuffer, Rgb};
+    let img = ImageBuffer::from_fn(width, height, |_x, _y| Rgb([255u8, 0u8, 0u8]));
+    img.save(path).unwrap();
+}
+
 fn create_test_coco_file(temp_dir: &TempDir, name: &str) -> PathBuf {
+    // Create actual image files
+    create_dummy_image(&temp_dir.path().join("test1.jpg"), 100, 100);
+    create_dummy_image(&temp_dir.path().join("test2.jpg"), 200, 200);
+
     let coco_json = r#"{
         "info": {
             "year": 2020,
@@ -267,6 +277,12 @@ fn test_cocosplit_preserves_annotations() {
 #[test]
 fn test_cocosplit_annotated_only() {
     let temp_dir = TempDir::new().unwrap();
+    
+    // Create actual image files
+    create_dummy_image(&temp_dir.path().join("test1.jpg"), 100, 100);
+    create_dummy_image(&temp_dir.path().join("test2.jpg"), 100, 100);
+    create_dummy_image(&temp_dir.path().join("test3.jpg"), 100, 100);
+    
     let coco_json = r#"{
         "images": [
             {"id": 1, "width": 100, "height": 100, "file_name": "test1.jpg"},
@@ -293,7 +309,7 @@ fn test_cocosplit_annotated_only() {
         .arg(&coco_path)
         .arg("-o")
         .arg(&output_path)
-        .arg("-a")
+        .arg("--annotated-only")
         .output()
         .expect("Failed to execute cocosplit");
 

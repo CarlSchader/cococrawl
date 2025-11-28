@@ -81,9 +81,9 @@ fn test_cococp_copies_images() {
         .expect("Failed to execute cococp");
 
     let images_dir = output_dir.join("images");
-    // 2 images = 1 digit padding
-    assert!(images_dir.join("0.jpg").exists());
-    assert!(images_dir.join("1.png").exists());
+    // Original filenames should be preserved
+    assert!(images_dir.join("img1.jpg").exists());
+    assert!(images_dir.join("img2.png").exists());
 }
 
 #[test]
@@ -103,14 +103,14 @@ fn test_cococp_updates_paths() {
     let coco_json = fs::read_to_string(&output_coco_path).unwrap();
     let coco: serde_json::Value = serde_json::from_str(&coco_json).unwrap();
 
-    // 2 images = 1 digit padding
+    // Original filenames should be preserved
     assert_eq!(
         coco["images"][0]["file_name"].as_str().unwrap(),
-        "images/0.jpg"
+        "images/img1.jpg"
     );
     assert_eq!(
         coco["images"][1]["file_name"].as_str().unwrap(),
-        "images/1.png"
+        "images/img2.png"
     );
 }
 
@@ -181,12 +181,12 @@ fn test_cococp_preserves_metadata() {
 }
 
 #[test]
-fn test_cococp_zero_padded_names() {
+fn test_cococp_preserves_many_filenames() {
     let temp_dir = TempDir::new().unwrap();
     let images_dir = temp_dir.path().join("source");
     fs::create_dir(&images_dir).unwrap();
 
-    // Create 100 images to test padding
+    // Create 100 images to test that original filenames are preserved
     for i in 0..100 {
         create_dummy_image(&images_dir.join(format!("img{}.jpg", i)), 10, 10);
     }
@@ -217,10 +217,10 @@ fn test_cococp_zero_padded_names() {
         .expect("Failed to execute cococp");
 
     let images_output = output_dir.join("images");
-    // Should be padded to 3 digits (000-099)
-    assert!(images_output.join("000.jpg").exists());
-    assert!(images_output.join("099.jpg").exists());
-    assert!(!images_output.join("0.jpg").exists());
+    // Original filenames should be preserved (not renamed to zero-padded IDs)
+    assert!(images_output.join("img0.jpg").exists());
+    assert!(images_output.join("img99.jpg").exists());
+    assert!(images_output.join("img50.jpg").exists());
 }
 
 #[test]
@@ -261,7 +261,7 @@ fn test_cococp_absolute_paths() {
         .expect("Failed to execute cococp");
 
     assert!(output.status.success());
-    assert!(output_dir.join("images").join("0.jpg").exists());
+    assert!(output_dir.join("images").join("img.jpg").exists());
 }
 
 #[test]
@@ -367,7 +367,7 @@ fn test_cococp_preserves_extension() {
         .expect("Failed to execute cococp");
 
     let images_output = output_dir.join("images");
-    assert!(images_output.join("0.jpg").exists());
-    assert!(images_output.join("1.png").exists());
-    assert!(images_output.join("2.bmp").exists());
+    assert!(images_output.join("img1.jpg").exists());
+    assert!(images_output.join("img2.png").exists());
+    assert!(images_output.join("img3.bmp").exists());
 }

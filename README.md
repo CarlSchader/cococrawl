@@ -14,7 +14,7 @@ Recursively scans directories for image files and generates a COCO-formatted JSO
 
 ### cococp
 
-Consolidates a COCO dataset by copying all referenced images into a single directory structure and updating the manifest with standardized file names.
+Consolidates a COCO dataset by copying all referenced images into a single directory structure while preserving original filenames and updating the manifest paths.
 
 ### cococount
 
@@ -106,8 +106,8 @@ cococp coco.json -o my-dataset
 my-dataset/
 ├── coco.json          # Updated manifest with new paths
 └── images/
-    ├── 00000.jpg      # Renamed with zero-padded IDs
-    ├── 00001.png
+    ├── img1.jpg       # Original filenames preserved
+    ├── img2.png
     └── ...
 ```
 

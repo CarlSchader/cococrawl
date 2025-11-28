@@ -32,6 +32,10 @@ struct Args {
     /// Version string for the COCO info section
     #[clap(short, long, default_value = "1.0.0")]
     version_string: String,
+
+    /// Force absolute paths for image file names in the merged output file.
+    #[clap(short, long)]
+    absolute_paths: bool,
 }
 
 fn main() {
@@ -127,14 +131,14 @@ fn main() {
             let mut new_image = image.clone();
 
             // hanlde image path
-            new_image.file_name = if PathBuf::from(&image.file_name).is_absolute() {
-                PathBuf::from(&image.file_name)
+            new_image.file_name = if image.file_name.is_absolute() {
+                image.file_name.clone()
             } else {
                 coco_file_path
                     .parent()
                     .unwrap()
                     .join(&image.file_name)
-            }.to_string_lossy().to_string();
+            };
 
             // handle license
             if let Some(new_license_id) = new_image.license {

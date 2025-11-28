@@ -1,8 +1,9 @@
 use chrono::{DateTime, Utc};
+use anyhow::Result;
 use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::{Path, PathBuf}};
 
 pub mod path_utils;
 
@@ -49,6 +50,19 @@ pub struct CocoImage {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub date_captured: Option<DateTime<Utc>>,
+}
+
+impl CocoImage {
+    pub fn get_absolute_path(&self, dataset_file_path: &Path) -> Result<PathBuf> {
+        if self.file_name.is_absolute() {
+            Ok(self.file_name.clone())
+        } else {
+            Ok(dataset_file_path
+                .parent()
+                .expect(format!("unable to get parent dir for {}", dataset_file_path.to_string_lossy()).as_str())
+                .join(&self.file_name))
+        }
+    }
 }
 
 impl HasID<i64> for CocoImage {

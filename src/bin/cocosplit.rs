@@ -1,5 +1,6 @@
 use clap::Parser;
-use cococrawl::CocoFile;
+use cococrawl::path_utils::create_coco_image_path;
+use cococrawl::{CocoFile, IDMapEntry};
 use indicatif::ParallelProgressIterator;
 use rand::{SeedableRng, rng, rngs::StdRng, seq::SliceRandom};
 use rayon::prelude::*;
@@ -19,7 +20,7 @@ struct Args {
 
     /// JSON output path
     #[clap(short, long, default_value = "split.json")]
-    output: String,
+    output: PathBuf,
 
     /// number of images to create the split with
     /// if not provided, all images not in the blacklisted sets will be used
@@ -44,8 +45,12 @@ struct Args {
 
     /// annotated images only
     /// if set, only images with at least one annotation will be included in the split
-    #[clap(short, long)]
+    #[clap(long)]
     annotated_only: bool,
+
+    /// Force absolute paths for image file names in the split output file.
+    #[clap(short, long)]
+    absolute_paths: bool,
 }
 
 fn main() {
@@ -54,6 +59,10 @@ fn main() {
     let coco_json = fs::read_to_string(&args.coco_file).expect("Could not read COCO JSON file");
     let coco_file: cococrawl::CocoFile =
         serde_json::from_str(&coco_json).expect("Could not parse COCO JSON");
+
+
+    // create output file upfront so canonicalize works
+    let output_file = File::create(&args.output).expect("Could not create output file");
 
     let blacklisted_image_ids: HashSet<i64> = args
         .blacklist_file
@@ -73,11 +82,12 @@ fn main() {
         .collect();
 
     let id_map = coco_file.make_image_id_map();
-    let mut id_map_entries: Vec<_> = id_map
+    let mut id_map_entries: Vec<(&i64, &IDMapEntry<'_>)> = id_map
         .par_iter()
         .progress_count(id_map.len() as u64)
         .filter(|(id, _)| !blacklisted_image_ids.contains(id))
         .collect();
+
 
     if args.shuffle.is_some() {
         match args.shuffle.unwrap() {
@@ -96,7 +106,7 @@ fn main() {
 
     // filter annotated only
     let id_map_entries: Vec<_> = if args.annotated_only {
-        println!("Filtering to annotated images only...");
+        eprintln!("Filtering to annotated images only...");
         id_map_entries
             .into_par_iter()
             .progress()
@@ -110,8 +120,9 @@ fn main() {
     let output_count = args
         .count
         .unwrap_or(id_map_entries.len().saturating_sub(offset));
-    let id_map_entries: Vec<_> = id_map_entries
-        .iter()
+
+    let id_map_entries: Vec<(&i64, &IDMapEntry<'_>)> = id_map_entries
+        .into_iter()
         .skip(offset)
         .take(output_count)
         .collect();
@@ -122,7 +133,18 @@ fn main() {
         images: id_map_entries
             .par_iter()
             .progress()
-            .map(|(_, entry)| entry.image.clone())
+            .map(|(_, entry)| {
+                let mut new_image = entry.image.clone();
+                new_image.file_name = create_coco_image_path(
+                    args.output.as_path(),
+                    new_image.get_absolute_path(&args.coco_file).expect("Could not get absolute image path").as_path(),
+                    args.absolute_paths,
+                ).expect(format!(
+                    "Could not create COCO image path for image id {}",
+                    new_image.id
+                ).as_str());
+                new_image
+            })
             .collect(),
         annotations: id_map_entries
             .par_iter()
@@ -139,7 +161,6 @@ fn main() {
         licenses: coco_file.licenses.clone(),
     };
 
-    let output_file = File::create(&args.output).expect("Could not create output file");
     let writer = BufWriter::new(output_file);
 
     serde_json::to_writer_pretty(writer, &output_coco_file)

@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use anyhow::Result;
 use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
@@ -29,6 +29,8 @@ pub struct CocoInfo {
     pub description: String,
     pub contributor: String,
     pub url: String,
+    /// Timezone-free COCO dates are interpreted as UTC (date-only values at midnight).
+    #[serde(deserialize_with = "date_from_coco")]
     pub date_created: DateTime<Utc>,
 }
 
@@ -48,7 +50,12 @@ pub struct CocoImage {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub coco_url: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Timezone-free COCO dates are interpreted as UTC (date-only values at midnight).
+    #[serde(
+        default,
+        deserialize_with = "optional_date_from_coco",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub date_captured: Option<DateTime<Utc>>,
 }
 
@@ -425,8 +432,16 @@ type CocoPolygon = Vec<f32>;
 // Run-length encoding for masks
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CocoRLE {
-    pub counts: Vec<u32>,
+    pub counts: CocoRLECounts,
     pub size: (u32, u32),
+}
+
+/// Preserves uncompressed runs or an opaque COCO compressed RLE string as supplied.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum CocoRLECounts {
+    Uncompressed(Vec<u32>),
+    Compressed(String),
 }
 
 // Methods for CocoFile ///////////////////////////////////
@@ -482,6 +497,39 @@ impl CocoFile {
             })
             .collect()
     }
+}
+
+fn parse_coco_date(value: &str) -> Result<DateTime<Utc>, chrono::ParseError> {
+    DateTime::parse_from_rfc3339(value)
+        .map(|date| date.with_timezone(&Utc))
+        .or_else(|_| {
+            NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S").map(|date| date.and_utc())
+        })
+        .or_else(|_| {
+            NaiveDate::parse_from_str(value, "%Y/%m/%d")
+                .or_else(|_| NaiveDate::parse_from_str(value, "%Y-%m-%d"))
+                .map(|date| date.and_hms_opt(0, 0, 0).expect("midnight is valid").and_utc())
+        })
+}
+
+fn date_from_coco<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = String::deserialize(deserializer)?;
+    parse_coco_date(&value).map_err(serde::de::Error::custom)
+}
+
+fn optional_date_from_coco<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    value
+        .as_deref()
+        .map(parse_coco_date)
+        .transpose()
+        .map_err(serde::de::Error::custom)
 }
 
 fn bool_from_int<'de, D>(deserializer: D) -> Result<bool, D::Error>
@@ -771,8 +819,7 @@ mod tests {
 
         match segmentation {
             CocoSegmentation::RLE(rle) => {
-                assert_eq!(rle.counts.len(), 4);
-                assert_eq!(rle.counts[0], 100);
+                assert_eq!(rle.counts, CocoRLECounts::Uncompressed(vec![100, 50, 100, 50]));
                 assert_eq!(rle.size, (640, 480));
             }
             _ => panic!("Expected RLE segmentation"),
@@ -787,7 +834,7 @@ mod tests {
         }"#;
 
         let rle: CocoRLE = serde_json::from_str(json).unwrap();
-        assert_eq!(rle.counts, vec![100, 50, 100]);
+        assert_eq!(rle.counts, CocoRLECounts::Uncompressed(vec![100, 50, 100]));
         assert_eq!(rle.size, (640, 480));
     }
 
@@ -1062,7 +1109,10 @@ mod tests {
                 assert_eq!(ann.dp_x, vec![10.0, 20.0, 30.0]);
                 assert_eq!(ann.dp_y, vec![15.0, 25.0, 35.0]);
                 assert_eq!(ann.dp_masks.len(), 1);
-                assert_eq!(ann.dp_masks[0].counts, vec![100, 50]);
+                assert_eq!(
+                    ann.dp_masks[0].counts,
+                    CocoRLECounts::Uncompressed(vec![100, 50])
+                );
             }
             _ => panic!("Expected DensePose annotation"),
         }
@@ -1083,7 +1133,7 @@ mod tests {
             dp_x: vec![5.0, 6.0],
             dp_y: vec![7.0, 8.0],
             dp_masks: vec![CocoRLE {
-                counts: vec![10, 20, 30],
+                counts: CocoRLECounts::Uncompressed(vec![10, 20, 30]),
                 size: (100, 200),
             }],
         };
@@ -1096,7 +1146,10 @@ mod tests {
         assert_eq!(deserialized.category_id, 7);
         assert_eq!(deserialized.iscrowd, true);
         assert_eq!(deserialized.dp_i, vec![1.0, 2.0]);
-        assert_eq!(deserialized.dp_masks[0].counts, vec![10, 20, 30]);
+        assert_eq!(
+            deserialized.dp_masks[0].counts,
+            CocoRLECounts::Uncompressed(vec![10, 20, 30])
+        );
     }
 
     #[test]
@@ -1788,14 +1841,14 @@ mod tests {
     #[test]
     fn test_empty_rle_counts() {
         let rle = CocoRLE {
-            counts: vec![],
+            counts: CocoRLECounts::Uncompressed(vec![]),
             size: (100, 100),
         };
 
         let serialized = serde_json::to_string(&rle).unwrap();
         let deserialized: CocoRLE = serde_json::from_str(&serialized).unwrap();
 
-        assert_eq!(deserialized.counts.len(), 0);
+        assert_eq!(deserialized.counts, CocoRLECounts::Uncompressed(vec![]));
         assert_eq!(deserialized.size, (100, 100));
     }
 

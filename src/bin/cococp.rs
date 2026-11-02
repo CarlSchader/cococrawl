@@ -1,11 +1,10 @@
 use clap::Parser;
+use cococrawl::output::write_json_atomic;
 use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
 use serde_json;
 use anyhow::Result;
 use std::fs;
-use std::fs::File;
-use std::io::BufWriter;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -101,11 +100,7 @@ fn main() -> Result<()> {
     // Write updated COCO JSON to output directory
     let output_coco_path =
         PathBuf::from(&args.output_dir_path).join(coco_json_file_name.to_string());
-    let output_file =
-        File::create(&output_coco_path).expect("Could not create output COCO JSON file");
-    let writer = BufWriter::new(output_file);
-    serde_json::to_writer_pretty(writer, &coco_file)
-        .expect("Could not write COCO JSON to output file");
+    write_json_atomic(&output_coco_path, &coco_file)?;
 
     Ok(())
 }

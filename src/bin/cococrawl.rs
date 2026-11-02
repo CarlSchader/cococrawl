@@ -4,14 +4,12 @@ use image::ImageReader;
 use anyhow::Result;
 use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
-use serde_json;
 use std::collections::HashSet;
 use std::fs;
-use std::fs::File;
-use std::io::BufWriter;
 use std::path::PathBuf;
 
 use cococrawl::{CocoFile, CocoImage, CocoInfo, path_utils::create_coco_image_path};
+use cococrawl::output::write_json_atomic;
 
 const IMAGE_EXTENSIONS: [&str; 8] = ["png", "jpg", "jpeg", "gif", "bmp", "tiff", "svg", "webp"];
 
@@ -38,8 +36,6 @@ struct Args {
 
 fn main() -> Result<()> {
     let args = Args::parse();
-
-    let output_file = File::create(&args.output).expect("Could not create output file");
 
     let extension_set: HashSet<&str> = IMAGE_EXTENSIONS.iter().cloned().collect();
 
@@ -109,9 +105,7 @@ fn main() -> Result<()> {
         licenses: None,
     };
 
-    let writer = BufWriter::new(output_file);
-
-    serde_json::to_writer_pretty(writer, &coco_file).expect("Could not write JSON to output file");
+    write_json_atomic(&args.output, &coco_file)?;
 
     Ok(())
 }

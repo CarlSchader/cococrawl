@@ -5,6 +5,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{collections::HashMap, path::{Path, PathBuf}};
 
+pub mod output;
 pub mod path_utils;
 
 #[derive(Serialize, Deserialize, Clone)]

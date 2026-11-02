@@ -1,4 +1,5 @@
 use clap::Parser;
+use cococrawl::output::write_json_atomic;
 use cococrawl::path_utils::create_coco_image_path;
 use cococrawl::{CocoFile, IDMapEntry};
 use indicatif::ParallelProgressIterator;
@@ -7,8 +8,6 @@ use rayon::prelude::*;
 use serde_json;
 use std::collections::HashSet;
 use std::fs;
-use std::fs::File;
-use std::io::BufWriter;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -60,9 +59,6 @@ fn main() {
     let coco_file: cococrawl::CocoFile =
         serde_json::from_str(&coco_json).expect("Could not parse COCO JSON");
 
-
-    // create output file upfront so canonicalize works
-    let output_file = File::create(&args.output).expect("Could not create output file");
 
     let blacklisted_image_ids: HashSet<i64> = args
         .blacklist_file
@@ -161,8 +157,6 @@ fn main() {
         licenses: coco_file.licenses.clone(),
     };
 
-    let writer = BufWriter::new(output_file);
-
-    serde_json::to_writer_pretty(writer, &output_coco_file)
+    write_json_atomic(&args.output, &output_coco_file)
         .expect("Could not write JSON to output file");
 }

@@ -300,6 +300,7 @@ dependencies = [
  "indicatif",
  "rand",
  "rayon",
+ "same-file",
  "serde",
  "serde_json",
  "tempfile",

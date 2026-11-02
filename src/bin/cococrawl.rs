@@ -4,14 +4,12 @@ use image::ImageReader;
 use anyhow::{Context, Result};
 use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
-use serde_json;
 use std::collections::HashSet;
 use std::fs;
-use std::fs::File;
-use std::io::BufWriter;
 use std::path::PathBuf;
 
 use cococrawl::{CocoFile, CocoImage, CocoInfo, path_utils::create_coco_image_path};
+use cococrawl::output::write_json_atomic;
 
 const IMAGE_EXTENSIONS: [&str; 8] = ["png", "jpg", "jpeg", "gif", "bmp", "tiff", "svg", "webp"];
 
@@ -64,22 +62,11 @@ fn main() -> Result<()> {
         .progress_count(entries.len() as u64)
         .enumerate()
         .map(|(id, entry)| -> Result<CocoImage> {
-            let written_path = (|| -> Result<PathBuf> {
-                if args.absolute_paths || args.output.try_exists()? {
-                    return create_coco_image_path(
-                        &args.output,
-                        entry.path(),
-                        args.absolute_paths,
-                    );
-                }
-                // New outputs do not exist yet: resolve their parent without creating them.
-                let parent = args.output.parent()
-                    .filter(|p| !p.as_os_str().is_empty())
-                    .unwrap_or_else(|| std::path::Path::new("."))
-                    .canonicalize()?;
-                let image = entry.path().canonicalize()?;
-                Ok(image.strip_prefix(parent).map(PathBuf::from).unwrap_or(image))
-            })()
+            let written_path = create_coco_image_path(
+                &args.output,
+                entry.path(),
+                args.absolute_paths,
+            )
             .with_context(|| {
                 format!(
                     "Could not create COCO image path for {} relative to {}",
@@ -129,10 +116,7 @@ fn main() -> Result<()> {
         licenses: None,
     };
 
-    let output_file = File::create(&args.output).expect("Could not create output file");
-    let writer = BufWriter::new(output_file);
-
-    serde_json::to_writer_pretty(writer, &coco_file).expect("Could not write JSON to output file");
+    write_json_atomic(&args.output, &coco_file)?;
 
     Ok(())
 }

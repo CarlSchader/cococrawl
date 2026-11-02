@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
-use std::io::{self, BufWriter};
+use std::io;
 use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
+use cococrawl::output::{validate_output_destination, write_json_atomic};
 use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
 use same_file::is_same_file;
@@ -27,7 +28,7 @@ struct Args {
 }
 
 // Resolve aliases without creating missing output directories or files. In
-// particular, a dangling manifest symlink may target a not-yet-copied image.
+// particular, a dangling symlink may target a not-yet-copied image.
 fn resolve_planned_path(path: &Path, remaining_links: u32) -> Result<PathBuf> {
     match path.canonicalize() {
         Ok(resolved) => return Ok(resolved),
@@ -77,6 +78,10 @@ fn main() -> Result<()> {
     // Reserve the eventual manifest destination too: an aliased images directory
     // must not let the final manifest write replace an image or its source.
     let manifest_path = args.output_dir_path.join(coco_json_file_name.as_ref());
+    // same_file opens paths for reading, which would block on a FIFO manifest.
+    // Reject unsupported output types without opening them, before identity checks.
+    validate_output_destination(&manifest_path)
+        .with_context(|| format!("Manifest destination {:?} is not supported", manifest_path))?;
     let resolved_manifest = resolve_planned_path(&std::path::absolute(&manifest_path)?, 40)?;
     let mut destinations: HashMap<PathBuf, PathBuf> = HashMap::new();
     let mut copies = Vec::new();
@@ -205,11 +210,7 @@ fn main() -> Result<()> {
     // Write updated COCO JSON to output directory
     let output_coco_path =
         PathBuf::from(&args.output_dir_path).join(coco_json_file_name.to_string());
-    let output_file =
-        File::create(&output_coco_path).expect("Could not create output COCO JSON file");
-    let writer = BufWriter::new(output_file);
-    serde_json::to_writer_pretty(writer, &coco_file)
-        .expect("Could not write COCO JSON to output file");
+    write_json_atomic(&output_coco_path, &coco_file)?;
 
     Ok(())
 }

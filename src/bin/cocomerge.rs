@@ -1,5 +1,6 @@
 use chrono::{Datelike, Utc};
 use clap::Parser;
+use cococrawl::output::write_json_atomic;
 use cococrawl::path_utils::create_coco_image_path;
 use cococrawl::{
     CocoAnnotation, CocoCategory, CocoFile, CocoImage, CocoInfo, CocoLicense, HasCategoryID, HasID,
@@ -9,8 +10,6 @@ use cococrawl::{
 use serde_json;
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::fs::File;
-use std::io::BufWriter;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -51,9 +50,6 @@ fn main() {
         })
         .collect();
 
-
-    // create output file now so canonicalize doesn't fail later
-    let output_file = File::create(&args.output_path).expect("Could not create output COCO JSON file");
 
     // Categories don't hash on id but instead they hash on the everything else in the struct.
     // This allows us to use this as a ground truth for making sure all categories have the same id
@@ -316,7 +312,6 @@ fn main() {
         categories: Some(category_set.into_iter().collect()),
     };
 
-    let writer = BufWriter::new(output_file);
-    serde_json::to_writer_pretty(writer, &merged_file)
+    write_json_atomic(&args.output_path, &merged_file)
         .expect("Could not write COCO JSON to output file");
 }

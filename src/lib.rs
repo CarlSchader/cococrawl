@@ -6,6 +6,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{collections::HashMap, path::{Path, PathBuf}};
 use std::hash::{Hash, Hasher};
 
+pub mod output;
 pub mod path_utils;
 
 #[derive(Serialize, Deserialize, Clone)]

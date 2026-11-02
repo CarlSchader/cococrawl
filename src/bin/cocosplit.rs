@@ -89,6 +89,9 @@ fn main() {
         .collect();
 
 
+    // HashMap iteration order varies between runs, so start every shuffle from stable IDs.
+    id_map_entries.sort_by_key(|(id, _)| *id);
+
     if args.shuffle.is_some() {
         match args.shuffle.unwrap() {
             Some(seed) => {
@@ -100,8 +103,6 @@ fn main() {
                 id_map_entries.shuffle(&mut rng);
             }
         }
-    } else {
-        id_map_entries.sort_by_key(|(id, _)| *id);
     }
 
     // filter annotated only

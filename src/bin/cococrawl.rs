@@ -1,7 +1,7 @@
 use chrono::{DateTime, Datelike, Utc};
 use clap::Parser;
 use image::ImageReader;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -39,43 +39,54 @@ fn main() -> Result<()> {
 
     let extension_set: HashSet<&str> = IMAGE_EXTENSIONS.iter().cloned().collect();
 
-    let entries: Vec<_> =  args
-        .directories
-        .iter()
-        .flat_map(|dir| {
-            walkdir::WalkDir::new(dir)
-                .into_iter()
-                .filter_map(Result::ok)
-                .filter(|entry| entry.file_type().is_file())
-                .filter(|entry| {
-                    entry
-                        .path()
-                        .extension()
-                        .and_then(|ext| ext.to_str())
-                        .map_or(false, |ext_str| {
-                            extension_set.contains(&ext_str.to_lowercase().as_str())
-                        })
-                })
-        }).collect();
+    let mut entries = Vec::new();
+    for dir in &args.directories {
+        for entry in walkdir::WalkDir::new(dir) {
+            let entry = entry.with_context(|| format!("Could not traverse input {dir}"))?;
+            if entry.file_type().is_file()
+                && entry
+                    .path()
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .map_or(false, |ext| {
+                        extension_set.contains(&ext.to_lowercase().as_str())
+                    })
+            {
+                entries.push(entry);
+            }
+        }
+    }
 
     let images: Vec<CocoImage> = entries
         .par_iter()
         .progress_count(entries.len() as u64)
         .enumerate()
-        .map(|(id, entry)| {
-            let written_path = create_coco_image_path(args.output.as_path(), entry.path(), args.absolute_paths).expect("Could not create COCO image path");
-            let metadata = fs::metadata(entry.path()).unwrap();
+        .map(|(id, entry)| -> Result<CocoImage> {
+            let written_path = create_coco_image_path(
+                &args.output,
+                entry.path(),
+                args.absolute_paths,
+            )
+            .with_context(|| {
+                format!(
+                    "Could not create COCO image path for {} relative to {}",
+                    entry.path().display(),
+                    args.output.display()
+                )
+            })?;
+            let metadata = fs::metadata(entry.path())
+                .with_context(|| format!("Could not read metadata for {}", entry.path().display()))?;
             let date_created = metadata.created().ok();
             let date_created = date_created.map(|dt| DateTime::<Utc>::from(dt));
 
             let (width, height) = ImageReader::open(&entry.path())
-                .unwrap()
+                .with_context(|| format!("Could not open image {}", entry.path().display()))?
                 .with_guessed_format()
-                .unwrap()
+                .with_context(|| format!("Could not read image {}", entry.path().display()))?
                 .into_dimensions()
                 .unwrap_or((0, 0));
 
-            CocoImage {
+            Ok(CocoImage {
                 id: id as i64,
                 width,
                 height,
@@ -84,9 +95,9 @@ fn main() -> Result<()> {
                 flickr_url: None,
                 coco_url: None,
                 date_captured: date_created,
-            }
+            })
         })
-        .collect();
+        .collect::<Result<Vec<_>>>()?;
 
     let coco_info = CocoInfo {
         year: Utc::now().year(),

@@ -24,6 +24,14 @@ pub fn write_json_atomic<T: Serialize + ?Sized>(path: &Path, value: &T) -> Resul
     write_atomic(path, |file| write_json_buffered(file, value))
 }
 
+/// Reject existing symlinks and special destinations using metadata only, without
+/// opening them. Missing destinations or parents are allowed for copy preflight;
+/// nothing is created. This is an early check, not a reservation: the atomic writer
+/// still validates the destination again before replacing it.
+pub fn validate_output_destination(path: &Path) -> Result<()> {
+    destination_permissions(path).map(|_| ())
+}
+
 fn destination_permissions(path: &Path) -> Result<Option<Permissions>> {
     match fs::symlink_metadata(path) {
         Ok(metadata) if metadata.file_type().is_file() => Ok(Some(metadata.permissions())),
@@ -39,7 +47,7 @@ fn destination_permissions(path: &Path) -> Result<Option<Permissions>> {
 
 fn write_atomic(path: &Path, write: impl FnOnce(&mut File) -> Result<()>) -> Result<()> {
     let path = resolve_output_path(path)?;
-    destination_permissions(&path)?;
+    validate_output_destination(&path)?;
     let parent = path.parent().context("Output path has no parent directory")?;
     let mut temporary = Builder::new()
         .prefix(".cococrawl-")
@@ -60,7 +68,7 @@ fn write_atomic(path: &Path, write: impl FnOnce(&mut File) -> Result<()>) -> Res
         .as_file()
         .sync_all()
         .context("Could not sync JSON output")?;
-    destination_permissions(&path)?;
+    validate_output_destination(&path)?;
     // Discard PersistError's temporary file before returning its I/O error, so cleanup
     // does not depend on when the caller drops the returned error.
     temporary
@@ -117,6 +125,14 @@ mod tests {
     fn assert_preserved_and_clean(directory: &TempDir, path: &Path) {
         assert_eq!(fs::read(path).unwrap(), b"original manifest\n");
         assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn early_validation_allows_missing_parents_without_creating_them() {
+        let directory = TempDir::new().unwrap();
+        let path = directory.path().join("missing/nested/output.json");
+        validate_output_destination(&path).unwrap();
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 0);
     }
 
     #[test]

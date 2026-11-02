@@ -391,6 +391,98 @@ fn all_writers_reject_socket_destinations() {
     }
 }
 
+#[cfg(unix)]
+fn run_with_timeout(command: &mut Command) -> Output {
+    use std::process::Stdio;
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if child.try_wait().unwrap().is_some() {
+            return child.wait_with_output().unwrap();
+        }
+        if Instant::now() >= deadline {
+            child.kill().expect("Could not kill timed-out child");
+            let output = child.wait_with_output().unwrap();
+            panic!("command blocked on special output for 5 seconds: {output:?}");
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[cfg(unix)]
+fn assert_copy_rejects_fifo_manifest(symlink_output: bool) {
+    use std::os::unix::fs::{FileTypeExt, MetadataExt, symlink};
+
+    let directory = fixture();
+    let input = directory.path().join("input.json");
+    let original_input = fs::read(&input).unwrap();
+    let originals: Vec<_> = ["images/one.png", "images/two.png"]
+        .iter()
+        .map(|name| {
+            let path = directory.path().join(name);
+            let bytes = fs::read(&path).unwrap();
+            (path, bytes)
+        })
+        .collect();
+    let destination = special_destination(directory.path());
+    let fifo = if symlink_output {
+        directory.path().join("target.fifo")
+    } else {
+        destination.clone()
+    };
+    let created = Command::new("mkfifo")
+        .arg(&fifo)
+        .output()
+        .expect("POSIX mkfifo must be available for FIFO regression tests");
+    assert_success(&created);
+    let original_fifo = fs::symlink_metadata(&fifo).unwrap();
+    assert!(original_fifo.file_type().is_fifo());
+    if symlink_output {
+        symlink(&fifo, &destination).unwrap();
+    }
+
+    let output = run_with_timeout(
+        Command::new(binary("cococp"))
+            .arg(&input)
+            .arg("-o")
+            .arg(destination.parent().unwrap()),
+    );
+    assert_rejected(&output);
+    let current_fifo = fs::symlink_metadata(&fifo).unwrap();
+    assert!(current_fifo.file_type().is_fifo());
+    assert_eq!(current_fifo.dev(), original_fifo.dev());
+    assert_eq!(current_fifo.ino(), original_fifo.ino());
+    if symlink_output {
+        assert_eq!(fs::read_link(&destination).unwrap(), fifo);
+    }
+    assert_eq!(fs::read(&input).unwrap(), original_input);
+    for (path, bytes) in originals {
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+    // Rejection must happen before preflight identity checks or any copy mutation.
+    assert!(!destination.parent().unwrap().join("images").exists());
+    assert_no_temporaries(destination.parent().unwrap());
+}
+
+#[cfg(unix)]
+#[test]
+fn cococp_rejects_fifo_manifest_with_nonempty_input_without_blocking() {
+    assert_copy_rejects_fifo_manifest(false);
+}
+
+#[cfg(unix)]
+#[test]
+fn cococp_rejects_symlink_to_fifo_manifest_with_nonempty_input_without_blocking() {
+    assert_copy_rejects_fifo_manifest(true);
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn dev_full_is_rejected_not_replaced_or_reported_as_success() {

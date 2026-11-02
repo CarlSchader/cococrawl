@@ -4,6 +4,7 @@ use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::{collections::HashMap, path::{Path, PathBuf}};
+use std::hash::{Hash, Hasher};
 
 pub mod path_utils;
 
@@ -82,7 +83,7 @@ impl HasID<i64> for CocoImage {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Hash)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct CocoLicense {
     pub id: i32,
     pub name: String,
@@ -96,6 +97,13 @@ impl PartialEq for CocoLicense {
 }
 
 impl Eq for CocoLicense {}
+
+impl Hash for CocoLicense {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.url.hash(state);
+    }
+}
 
 impl HasID<i32> for CocoLicense {
     fn id(&self) -> i32 {
@@ -310,7 +318,7 @@ impl HasID<i32> for CocoCategory {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Hash)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct CocoObjectDetectionCategory {
     // also used for dense pose
     pub id: i32,
@@ -326,6 +334,13 @@ impl PartialEq for CocoObjectDetectionCategory {
 
 impl Eq for CocoObjectDetectionCategory {}
 
+impl Hash for CocoObjectDetectionCategory {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.supercategory.hash(state);
+        self.name.hash(state);
+    }
+}
+
 impl HasID<i32> for CocoObjectDetectionCategory {
     fn id(&self) -> i32 {
         self.id
@@ -336,7 +351,7 @@ impl HasID<i32> for CocoObjectDetectionCategory {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Hash)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct CocoKeypointDetectionCategory {
     pub id: i32,
     pub name: String,
@@ -356,6 +371,15 @@ impl PartialEq for CocoKeypointDetectionCategory {
 
 impl Eq for CocoKeypointDetectionCategory {}
 
+impl Hash for CocoKeypointDetectionCategory {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.supercategory.hash(state);
+        self.name.hash(state);
+        self.keypoints.hash(state);
+        self.skeleton.hash(state);
+    }
+}
+
 impl HasID<i32> for CocoKeypointDetectionCategory {
     fn id(&self) -> i32 {
         self.id
@@ -366,7 +390,7 @@ impl HasID<i32> for CocoKeypointDetectionCategory {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Hash)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct CocoPanopticSegmentationCategory {
     pub id: i32,
     pub name: String,
@@ -386,6 +410,15 @@ impl PartialEq for CocoPanopticSegmentationCategory {
 }
 
 impl Eq for CocoPanopticSegmentationCategory {}
+
+impl Hash for CocoPanopticSegmentationCategory {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.supercategory.hash(state);
+        self.name.hash(state);
+        self.isthing.hash(state);
+        self.color.hash(state);
+    }
+}
 
 impl HasID<i32> for CocoPanopticSegmentationCategory {
     fn id(&self) -> i32 {

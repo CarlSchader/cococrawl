@@ -89,6 +89,7 @@ fn main() {
                     // category hasn't been seen yet and it's id clashes with an existing category
                     let mut new_category = category.clone();
                     new_category.set_id(next_unseen_category_id);
+                    category_seen_ids.insert(new_category.id());
                     next_unseen_category_id += 1;
                     category_id_remap.insert(category.id(), new_category.id());
                     category_set.insert(new_category);
@@ -115,6 +116,7 @@ fn main() {
                     // license hasn't been seen yet and it's id clashes with an existing license
                     let mut new_license = license.clone();
                     new_license.set_id(next_unseen_license_id);
+                    license_seen_ids.insert(new_license.id());
                     next_unseen_license_id += 1;
                     license_id_remap.insert(license.id(), new_license.id());
                     license_set.insert(new_license);
@@ -232,18 +234,8 @@ fn main() {
                             );
                             segment.category_id = new_category_id;
 
-                            // special case. We want unique segment ids across the whole dataset
-                            // including other annotation types
-                            if seen_annotation_ids.contains(&segment.id()) {
-                                segment.set_id(next_unseen_annotation_id);
-                                next_unseen_annotation_id += 1;
-                                seen_annotation_ids.insert(segment.id());
-                            } else {
-                                if segment.id() >= next_unseen_annotation_id {
-                                    next_unseen_annotation_id = segment.id() + 1;
-                                }
-                                seen_annotation_ids.insert(segment.id());
-                            }
+                            // Segment IDs encode mask pixel colors and are local to each image.
+                            // Preserve them independently of dataset-wide annotation IDs.
                         });
                     },
                     CocoAnnotation::ImageCaptioning(ref mut ann) => {

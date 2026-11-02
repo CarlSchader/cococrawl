@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::{self, BufWriter};
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
@@ -26,6 +26,42 @@ struct Args {
     absolute_paths: bool,
 }
 
+// Resolve aliases without creating missing output directories or files. In
+// particular, a dangling manifest symlink may target a not-yet-copied image.
+fn resolve_planned_path(path: &Path, remaining_links: u32) -> Result<PathBuf> {
+    match path.canonicalize() {
+        Ok(resolved) => return Ok(resolved),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error).with_context(|| format!("Could not resolve {:?}", path)),
+    }
+
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.is_symlink() => {
+            if remaining_links == 0 {
+                bail!("Too many symlinks while resolving {:?}", path);
+            }
+            let target = fs::read_link(path)?;
+            let target = path.parent().context("Symlink has no parent")?.join(target);
+            return resolve_planned_path(&target, remaining_links - 1);
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error).with_context(|| format!("Could not inspect {:?}", path)),
+    }
+
+    let parent = path.parent().context("Output path has no existing ancestor")?;
+    let mut resolved = resolve_planned_path(parent, remaining_links)?;
+    match path.components().next_back() {
+        Some(Component::Normal(name)) => resolved.push(name),
+        Some(Component::ParentDir) => {
+            resolved.pop();
+        }
+        Some(Component::CurDir) => {}
+        _ => bail!("Could not resolve output path {:?}", path),
+    }
+    Ok(resolved)
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
 
@@ -38,6 +74,10 @@ fn main() -> Result<()> {
     // Validate every mapping before creating directories or copying any bytes.
     // A destination can be shared only by references to the very same source file.
     let images_output_path = args.output_dir_path.join("images");
+    // Reserve the eventual manifest destination too: an aliased images directory
+    // must not let the final manifest write replace an image or its source.
+    let manifest_path = args.output_dir_path.join(coco_json_file_name.as_ref());
+    let resolved_manifest = resolve_planned_path(&std::path::absolute(&manifest_path)?, 40)?;
     let mut destinations: HashMap<PathBuf, PathBuf> = HashMap::new();
     let mut copies = Vec::new();
     let mut image_file_names = Vec::with_capacity(coco_file.images.len());
@@ -61,6 +101,29 @@ fn main() -> Result<()> {
             .with_context(|| format!("Could not get source image file name: {:?}", src_path))?
             .to_owned();
         let dest_path = images_output_path.join(&file_name);
+        for image_path in [&src_path, &dest_path] {
+            let resolved_image = resolve_planned_path(&std::path::absolute(image_path)?, 40)?;
+            let overlaps_manifest = if resolved_image == resolved_manifest {
+                true
+            } else {
+                match is_same_file(&resolved_manifest, &resolved_image) {
+                    Ok(same) => same,
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => false,
+                    Err(error) => {
+                        return Err(error).with_context(|| {
+                            format!("Could not compare manifest and image paths {:?}", image_path)
+                        });
+                    }
+                }
+            };
+            if overlaps_manifest {
+                bail!(
+                    "Manifest destination {:?} overlaps image source or destination {:?}",
+                    manifest_path,
+                    image_path
+                );
+            }
+        }
         if let Some(previous_source) = destinations.get(&dest_path) {
             if !is_same_file(previous_source, &src_path).with_context(|| {
                 format!(

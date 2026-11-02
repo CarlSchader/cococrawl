@@ -284,6 +284,129 @@ fn symlink_source_aliases_can_share_a_destination() {
     assert_eq!(output_images(&output).len(), 2);
 }
 
+#[cfg(unix)]
+#[test]
+fn manifest_directory_alias_cannot_replace_same_file_source() {
+    let temp = TempDir::new().unwrap();
+    let output = temp.path().join("out");
+    let source = output.join("x.png");
+    write_file(&source, b"source must not become a manifest");
+    write_file(&temp.path().join("source/first.png"), b"first source");
+    std::os::unix::fs::symlink(".", output.join("images")).unwrap();
+    let input = manifest(temp.path(), &["source/first.png", "out/x.png"]);
+    let renamed_input = temp.path().join("x.png");
+    fs::rename(input, &renamed_input).unwrap();
+    let original_manifest = fs::read(&renamed_input).unwrap();
+
+    assert_failure(copy(&renamed_input, &output), "Manifest destination");
+
+    assert_eq!(fs::read(source).unwrap(), b"source must not become a manifest");
+    assert_eq!(fs::read(renamed_input).unwrap(), original_manifest);
+    assert!(!output.join("first.png").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn manifest_directory_alias_cannot_replace_a_planned_image() {
+    let temp = TempDir::new().unwrap();
+    write_file(&temp.path().join("source/x.png"), b"new image bytes");
+    write_file(&temp.path().join("source/first.png"), b"first source");
+    let output = temp.path().join("out");
+    fs::create_dir(&output).unwrap();
+    std::os::unix::fs::symlink(".", output.join("images")).unwrap();
+    let input = manifest(temp.path(), &["source/first.png", "source/x.png"]);
+    let renamed_input = temp.path().join("x.png");
+    fs::rename(input, &renamed_input).unwrap();
+
+    assert_failure(copy(&renamed_input, &output), "Manifest destination");
+
+    assert!(!output.join("x.png").exists());
+    assert!(!output.join("first.png").exists());
+    assert_eq!(
+        fs::read(temp.path().join("source/x.png")).unwrap(),
+        b"new image bytes"
+    );
+}
+
+#[test]
+fn manifest_hard_link_to_source_is_rejected_before_copying() {
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source/x.png");
+    write_file(&source, b"hard linked source bytes");
+    let input = manifest(temp.path(), &["source/x.png"]);
+    let output = temp.path().join("out");
+    fs::create_dir(&output).unwrap();
+    fs::hard_link(&source, output.join("dataset.json")).unwrap();
+
+    assert_failure(copy(&input, &output), "Manifest destination");
+
+    assert!(!output.join("images").exists());
+    assert_eq!(fs::read(source).unwrap(), b"hard linked source bytes");
+    assert_eq!(
+        fs::read(output.join("dataset.json")).unwrap(),
+        b"hard linked source bytes"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn manifest_symlink_to_source_is_rejected_before_copying() {
+    let temp = TempDir::new().unwrap();
+    let source = temp.path().join("source/x.png");
+    write_file(&source, b"symlinked source bytes");
+    let input = manifest(temp.path(), &["source/x.png"]);
+    let output = temp.path().join("out");
+    fs::create_dir(&output).unwrap();
+    std::os::unix::fs::symlink(&source, output.join("dataset.json")).unwrap();
+
+    assert_failure(copy(&input, &output), "Manifest destination");
+
+    assert!(!output.join("images").exists());
+    assert_eq!(fs::read(source).unwrap(), b"symlinked source bytes");
+    assert!(
+        fs::symlink_metadata(output.join("dataset.json"))
+            .unwrap()
+            .is_symlink()
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn dangling_manifest_symlink_to_planned_image_is_rejected() {
+    let temp = TempDir::new().unwrap();
+    write_file(&temp.path().join("source/x.png"), b"new image bytes");
+    let input = manifest(temp.path(), &["source/x.png"]);
+    let output = temp.path().join("out");
+    fs::create_dir(&output).unwrap();
+    std::os::unix::fs::symlink("images/x.png", output.join("dataset.json")).unwrap();
+
+    assert_failure(copy(&input, &output), "Manifest destination");
+
+    assert!(!output.join("images").exists());
+    assert!(
+        fs::symlink_metadata(output.join("dataset.json"))
+            .unwrap()
+            .is_symlink()
+    );
+}
+
+#[test]
+fn matching_manifest_and_image_basenames_are_safe_in_distinct_directories() {
+    let temp = TempDir::new().unwrap();
+    write_file(&temp.path().join("source/x.png"), b"image bytes");
+    let input = manifest(temp.path(), &["source/x.png"]);
+    let renamed_input = temp.path().join("x.png");
+    fs::rename(input, &renamed_input).unwrap();
+    let output = temp.path().join("new/out");
+
+    assert_success(copy(&renamed_input, &output));
+
+    assert_eq!(fs::read(output.join("images/x.png")).unwrap(), b"image bytes");
+    let written_manifest: Value =
+        serde_json::from_slice(&fs::read(output.join("x.png")).unwrap()).unwrap();
+    assert_eq!(written_manifest["images"][0]["file_name"], "images/x.png");
+}
+
 #[test]
 fn missing_source_keeps_its_reference_and_warning() {
     let temp = TempDir::new().unwrap();
